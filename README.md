@@ -3,6 +3,8 @@
 <a href="url"><img src="./PIC/MiniLoRa-pic.png" height="auto" width="auto" style="border-radius:40px"></a>
 
 ---
+<a href="https://discord.gg/ZdWrauP4Yt"><img alt="Discord" src="https://img.shields.io/badge/-Join-lightblue?logo=discord"></a>
+---
 
 ## Table of Contents
 

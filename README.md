@@ -27,7 +27,7 @@ Small size multi-purpose **ESP32-C6** board with **LoRa** and **2.4 GHz** connec
 
 ### Features
 
-* ESP32-C6 - <a href="./DOC/Datasheets/esp32-c6.pdf">XIAO-ESP32C6</a>
+* ESP32-C6 -> <a href="./DOC/Datasheets/esp32-c6.pdf">XIAO-ESP32C6</a>
   * 32 bits RISC-V Main processor : 160 MHz
   * 32 bits RISC-V Low power processor : 20 Mhz
   * 512 KB RAM
@@ -36,13 +36,13 @@ Small size multi-purpose **ESP32-C6** board with **LoRa** and **2.4 GHz** connec
   * Bluetooth 5 (BLE)
   * Zigbee / Matter / Thread (802.15.4)
     Internal or external antenna
-* LoRa modem
+* LoRa modem -> <a href="./DOC/Datasheets/Wio-SX1262_Module.pdf">WIO-SX1262</a>
   * LoRaWan capable
   * External Antenna
-* GNSS with integrated antenna
-* Temperature and humidity sensor
-* Luminosity sensor
-* 3-axis accelerometer
+* GNSS with integrated antenna -> <a href="./DOC/Datasheets/CD-PA1010D.pdf">CD-PA1010D</a>
+* Temperature and humidity sensor -> <a href="./DOC/Datasheets/Sensirion_SHT4x.pdf">SHT4X</a>
+* Luminosity sensor -> <a href="./DOC/Datasheets/opt3001.pdf">OPT3001</a>
+* 3-axis accelerometer -> <a href="./DOC/Datasheets/lis3dh.pdf">LIS3DH</a>
 * 2 user accessible LED
 * 1 user accessible button
 * Voltage reading of the battery

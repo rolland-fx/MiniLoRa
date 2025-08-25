@@ -27,7 +27,7 @@ Small size multi-purpose **ESP32-C6** board with **LoRa** and **2.4 GHz** connec
 
 ### Features
 
-* ESP32-C6
+* ESP32-C6 - <a href="./DOC/Datasheets/esp32-c6.pdf">XIAO-ESP32C6</a>
   * 32 bits RISC-V Main processor : 160 MHz
   * 32 bits RISC-V Low power processor : 20 Mhz
   * 512 KB RAM

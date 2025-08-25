@@ -73,9 +73,41 @@ Design with Kicad 9.0
 * Production files for the current batch are also included
 * Libraries used can be found under **HW\PCB\lib**
 
+**Enclosure Info**
+
+Design with FreeCad 1.0
+
+* Very basic and not finished
+* Can be 3D printed with basic HW
+* Should be improved in the future
+* Thought to be attached to backpack
+
 ## 💾 Software Overview
 
 ## 🚀To Do and Next Steps
+
+Here are the idea for the next improvement and developpement :
+
+### Software
+
+* Create a first full version in Arduino
+* Create a better / smaller / mor realiable version directly with FreeRTOS
+* User inteface with one button
+* BLE app for phones and PC
+* App for configuration via USB-C
+
+### Hardware
+
+* Size can me optimized
+* I2C pads for external sensors
+* External BMS for energy harversting
+* Pressure sensor (or Temp / Hum / Pressure)
+* 1-PPS connection to MCU from GPS
+* GNSS module with external flat antenna
+
+
+
+
 
 
 

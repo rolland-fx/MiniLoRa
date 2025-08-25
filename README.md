@@ -15,6 +15,12 @@
 
 Small size multi-purpose **ESP32-C6** board with **LoRa** and **2.4 GHz** connectivity.
 
+**Main focus**
+
+* Low power consumption for long battery life
+* Multiple wireless connectivity
+* Small size
+
 ### Features
 
 * ESP32-C6
@@ -36,7 +42,7 @@ Small size multi-purpose **ESP32-C6** board with **LoRa** and **2.4 GHz** connec
 * 2 user accessible LED
 * 1 user accessible button
 * Voltage reading of the battery
-* Integrated BMS
+* Integrated BMS and JST connector
 
 
 
@@ -45,7 +51,23 @@ Small size multi-purpose **ESP32-C6** board with **LoRa** and **2.4 GHz** connec
 <a href="url"><img src="./PIC/MiniLora-pcb.png" height="auto" width="auto" style="border-radius:40px"></a>
 ---
 
+**PCB dimension**
 
+| D| mm|
+| --- | --- |
+| L | 50 |
+| W | 32 |
+| H | 12,5* |
+
+* including GNSS module and JST connector
+
+**PCB Info**
+
+Design with Kicad 9.0
+
+* Full schematic and design can be found under **HW\PCB**
+* Production files for the current batch are also included
+* Libraries used can be found under **HW\PCB\lib**
 
 ## 💾 Software Overview
 

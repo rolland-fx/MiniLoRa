@@ -72,6 +72,7 @@ Design with Kicad 9.0
 * Full schematic and design can be found under **HW\PCB**
 * Production files for the current batch are also included
 * Libraries used can be found under **HW\PCB\lib**
+* PDF can be found under : **DOC\Schematics**
 
 **Enclosure Info**
 

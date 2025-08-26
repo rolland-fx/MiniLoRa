@@ -35,7 +35,7 @@ Small size multi-purpose **ESP32-C6** board with **LoRa** and **2.4 GHz** connec
   * Wi-Fi 6 (2.4 GHz)
   * Bluetooth 5 (BLE)
   * Zigbee / Matter / Thread (802.15.4)
-    Internal or external antenna
+  * All 2.4 GHz radios : Internal or external antenna switch via GPIO
 * LoRa modem -> <a href="./DOC/Datasheets/Wio-SX1262_Module.pdf">WIO-SX1262</a>
   * LoRaWan capable
   * External Antenna

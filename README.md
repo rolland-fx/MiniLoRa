@@ -86,6 +86,15 @@ Design with FreeCad 1.0
 
 ## 💾 Software Overview
 
+I2C adresses of sensors :
+
+| Sensor| ADD|
+| --- | --- |
+| GNSS | 0x10 |
+| ACC | 0x19 |
+| TEMP | 0x44 |
+| LUM | 0x47 |
+
 ## 🚀To Do and Next Steps
 
 Here are the idea for the next improvement and developpement :

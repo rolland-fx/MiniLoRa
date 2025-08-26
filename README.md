@@ -52,9 +52,6 @@ Small size multi-purpose **ESP32-C6** board with **LoRa** and **2.4 GHz** connec
 
 ## ⚙️ Hardware Overview
 
-<a href="url"><img src="./PIC/MiniLora-pcb.png" height="auto" width="auto" style="border-radius:40px"></a>
----
-
 **PCB dimension**
 
 | D| mm|
@@ -67,6 +64,8 @@ Small size multi-purpose **ESP32-C6** board with **LoRa** and **2.4 GHz** connec
 
 **PCB Info**
 
+<a href="url"><img src="./PIC/MiniLora-pcb.png" height="auto" width="auto" style="border-radius:40px"></a>
+
 Design with Kicad 9.0
 
 * Full schematic and design can be found under **HW\PCB**
@@ -75,6 +74,8 @@ Design with Kicad 9.0
 * PDF can be found under : **DOC\Schematics**
 
 **Enclosure Info**
+
+<a href="url"><img src="./PIC/MiniLora-pcb.enc" height="auto" width="auto" style="border-radius:40px"></a>
 
 Design with FreeCad 1.0
 

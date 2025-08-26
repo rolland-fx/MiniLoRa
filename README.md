@@ -75,7 +75,7 @@ Design with Kicad 9.0
 
 **Enclosure Info**
 
-<a href="url"><img src="./PIC/MiniLora-pcb.enc" height="auto" width="auto" style="border-radius:40px"></a>
+<a href="url"><img src="./PIC/MiniLora-enc.png" height="auto" width="auto" style="border-radius:40px"></a>
 
 Design with FreeCad 1.0
 

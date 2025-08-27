@@ -3,11 +3,11 @@
 <a href="url"><img src="./PIC/MiniLoRa-pic.png" height="auto" width="auto" style="border-radius:40px"></a>
 
 ---
-
+<!---
 Discord server dedicated to this project :
 <a href="https://discord.gg/ZdWrauP4Yt"><img alt="Discord" src="https://img.shields.io/badge/-Join-lightblue?logo=discord"></a>
 ---
-
+-->
 ## Table of Contents
 
 - [✨ What's MiniLoRa?](#-whats-MiniLoRa)
@@ -52,9 +52,6 @@ Small size multi-purpose **ESP32-C6** board with **LoRa** and **2.4 GHz** connec
 
 ## ⚙️ Hardware Overview
 
-<a href="url"><img src="./PIC/MiniLora-pcb.png" height="auto" width="auto" style="border-radius:40px"></a>
----
-
 **PCB dimension**
 
 | D| mm|
@@ -67,6 +64,8 @@ Small size multi-purpose **ESP32-C6** board with **LoRa** and **2.4 GHz** connec
 
 **PCB Info**
 
+<a href="url"><img src="./PIC/MiniLora-pcb.png" height="auto" width="auto" style="border-radius:40px"></a>
+
 Design with Kicad 9.0
 
 * Full schematic and design can be found under **HW\PCB**
@@ -76,6 +75,8 @@ Design with Kicad 9.0
 
 **Enclosure Info**
 
+<a href="url"><img src="./PIC/MiniLoRa-enc.png" height="auto" width="auto" style="border-radius:40px"></a>
+
 Design with FreeCad 1.0
 
 * Very basic and not finished
@@ -84,6 +85,15 @@ Design with FreeCad 1.0
 * Thought to be attached to backpack
 
 ## 💾 Software Overview
+
+I2C adresses of sensors :
+
+| Sensor| ADD|
+| --- | --- |
+| GNSS | 0x10 |
+| ACC | 0x19 |
+| TEMP | 0x44 |
+| LUM | 0x47 |
 
 ## 🚀To Do and Next Steps
 

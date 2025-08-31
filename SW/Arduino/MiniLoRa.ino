@@ -21,12 +21,12 @@
 
 #include "config.h"
 
-#define DEBUG true
+#define DEBUG false
 #define uS_TO_mS_FACTOR 1000ULL
 
 
-#define RANGE 2
-int const SLEEP_T[4] = { 60000, 300000, 600000, 1200000 };
+#define RANGE 3
+int const SLEEP_T[6] = { 60000, 300000, 600000, 900000, 1200000, 1800000};
 
 #define WIFI false
 #define BLE false
@@ -120,13 +120,12 @@ void setup() {
   gpio_hold_dis(BLUE);
   gpio_hold_dis(LORA_RST);
   gpio_hold_dis(BAT_ON);
+  wakeup_reason = esp_sleep_get_wakeup_cause();
   if (DEBUG) {
     Serial.begin(115200);
     delay(100);
+    Serial.println(wakeup_reason);
   }
-  wakeup_reason = esp_sleep_get_wakeup_cause();
-  Serial.println(wakeup_reason);
-
   if(wakeup_reason == ESP_SLEEP_WAKEUP_EXT1)
   {
     delay(20000);
@@ -159,13 +158,16 @@ void setup() {
     lis.setRange(LIS3DH_RANGE_4_G);
     lis.setPerformanceMode(LIS3DH_MODE_LOW_POWER);
     lis.setDataRate(LIS3DH_DATARATE_10_HZ);
+    Wire.endTransmission();
   }
   if (LORAWAN) {
     digitalWrite(LORA_RST, HIGH);
   }
   if (LOCAL_STORE) {
   }
-  delay(2500);
+  delay(250);
+  digitalWrite(BLUE, HIGH);
+  delay(2250);
   // Data acquisition
   if (GNSS) {
     uint8_t turn = 0;
@@ -205,12 +207,14 @@ void setup() {
     Lum_exp = buf[0] >> 4;
     Lum_man = buf[1] | ((buf[0] & 0x0F) << 8);
     LiveData.Lum = (int)Lum_man * (0.01 * pow(2, Lum_exp));
+    Wire.endTransmission();
   }
   if (LIS3DH) {
     lis.read();
     LiveData.Acc_x = (int)lis.x;
     LiveData.Acc_y = (int)lis.y;
     LiveData.Acc_z = (int)lis.z;
+    Wire.endTransmission();
   }
   digitalWrite(BAT_ON, HIGH);
   delay(50);

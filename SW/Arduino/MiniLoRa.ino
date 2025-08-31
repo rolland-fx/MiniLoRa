@@ -26,7 +26,7 @@
 
 
 #define RANGE 2
-int const SLEEP_T[4] = { 30000, 60000, 300000, 900000 };
+int const SLEEP_T[4] = { 60000, 300000, 600000, 1200000 };
 
 #define WIFI false
 #define BLE false
@@ -102,6 +102,11 @@ uint16_t Lum_exp;
 
 I2CGPS myI2CGPS;
 TinyGPSPlus gps;
+esp_sleep_wakeup_cause_t wakeup_reason;
+
+
+#define BUTTON_PIN_BITMASK(GPIO) (1ULL << GPIO)  // 2 ^ GPIO_NUMBER in hex
+#define WAKEUP_GPIO              GPIO_NUM_7     // Only RTC IO are allowed - ESP32 Pin example
 
 void setup() {
   // Wake-up procedure
@@ -115,11 +120,19 @@ void setup() {
   gpio_hold_dis(BLUE);
   gpio_hold_dis(LORA_RST);
   gpio_hold_dis(BAT_ON);
-  Wire.begin();
-  digitalWrite(BLUE, LOW);
   if (DEBUG) {
     Serial.begin(115200);
+    delay(100);
   }
+  wakeup_reason = esp_sleep_get_wakeup_cause();
+  Serial.println(wakeup_reason);
+
+  if(wakeup_reason == ESP_SLEEP_WAKEUP_EXT1)
+  {
+    delay(20000);
+  }
+  Wire.begin();
+  digitalWrite(BLUE, LOW);
   if (GNSS) {
     digitalWrite(GNSS_RST, HIGH);
     delay(100);
@@ -316,6 +329,10 @@ void setup() {
   if (DEBUG) {
     Serial.flush();
   }
+  esp_sleep_enable_ext1_wakeup_io(BUTTON_PIN_BITMASK(WAKEUP_GPIO), ESP_EXT1_WAKEUP_ANY_LOW);
+  rtc_gpio_pulldown_dis(WAKEUP_GPIO);  // GPIO33 is tie to GND in order to wake up in HIGH
+  rtc_gpio_pullup_dis(WAKEUP_GPIO);   // Disable PULL_UP in order to allow it to wakeup on HIGH
+
   digitalWrite(BLUE, HIGH);
   gpio_hold_en(GNSS_RST);
   gpio_hold_en(BLUE);

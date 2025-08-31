@@ -1,6 +1,4 @@
 function decodeUplink(input) {
-  var buf = new ArrayBuffer(8);
-  var view = new DataView(buf);
   var data = {};
   data.Temperature = input.bytes[0];
   data.Humidity = input.bytes[1];
@@ -14,6 +12,7 @@ function decodeUplink(input) {
   data.Alt = ((input.bytes[17] << 8) + (input.bytes[16]))
   data.Sat = input.bytes[18]
   data.Time = (((input).bytes[22] << 24 ) + (input.bytes[21] << 16) + (input.bytes[20] << 8) + (input.bytes[19]))
+
   return {
     data: data,
     };

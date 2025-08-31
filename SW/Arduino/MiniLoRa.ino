@@ -62,11 +62,11 @@ struct Data { //Total size : 55 bytes. To Store data with all the precisions
   char UTC[20];
 };
 
-struct LoRaWanData { //Total size : 22 bytes. To send via LoRaWan
+struct LoRaWanData { //Total size : 24 bytes. To send via LoRaWan
   int8_t Temp;
   uint8_t Hum;
   uint8_t Bat_vol;
-  uint8_t Lum;
+  uint16_t Lum;
   uint8_t Acc_x;
   uint8_t Acc_y;
   uint8_t Acc_z;
@@ -91,7 +91,7 @@ float fHum;
 ESP32Time rtc;
 
 uint8_t buf[4];
-uint8_t uplinkPayload[22];
+uint8_t uplinkPayload[23];
 
 double Lat_buffer;
 double Lon_buffer;
@@ -221,7 +221,7 @@ void setup() {
     LoRaData.Temp = LiveData.Temp;
     LoRaData.Hum = LiveData.Hum;
     LoRaData.Bat_vol = (uint8_t) map(LiveData.Bat_vol, 0, 4500, 0, 255);
-    LoRaData.Lum = (uint8_t) map(LiveData.Lum, 0, 5000, 0, 255);
+    LoRaData.Lum = LiveData.Lum;
     LoRaData.Acc_x = (uint8_t) map(LiveData.Acc_x, 0, 10000, 0, 255);
     LoRaData.Acc_y = (uint8_t) map(LiveData.Acc_y, 0, 10000, 0, 255);
     LoRaData.Acc_z = (uint8_t) map(LiveData.Acc_z, 0, 10000, 0, 255);
@@ -229,7 +229,7 @@ void setup() {
     Lon_buffer =  LiveData.Lon* 1000000.0;
     LoRaData.Lat = (int32_t)Lat_buffer;
     LoRaData.Lon = (int32_t)Lon_buffer; 
-    LoRaData.Alt = LiveData.Alt;
+    LoRaData.Alt = (int16_t) LiveData.Alt;
     LoRaData.Sat = LiveData.Sat;
     LoRaData.Time = LiveData.Time;
     
@@ -250,28 +250,29 @@ void setup() {
     uplinkPayload[0] = LoRaData.Temp;
     uplinkPayload[1] = LoRaData.Hum;
     uplinkPayload[2] = LoRaData.Bat_vol;
-    uplinkPayload[3] = LoRaData.Lum;
-    uplinkPayload[4] = LoRaData.Acc_x;
-    uplinkPayload[5] = LoRaData.Acc_y;
-    uplinkPayload[6] = LoRaData.Acc_z;
+    uplinkPayload[3] = lowByte(LoRaData.Lum);
+    uplinkPayload[4] = highByte(LoRaData.Lum);  
+    uplinkPayload[5] = LoRaData.Acc_x;
+    uplinkPayload[6] = LoRaData.Acc_y;
+    uplinkPayload[7] = LoRaData.Acc_z;
     uint8_t *a_lat = ByteConvert::varToArray<int>(s_lat,LoRaData.Lat);
-    uplinkPayload[7] = a_lat[3];
-    uplinkPayload[8] = a_lat[2];
-    uplinkPayload[9] = a_lat[1];
-    uplinkPayload[10] = a_lat[0];
+    uplinkPayload[8] = a_lat[3];
+    uplinkPayload[9] = a_lat[2];
+    uplinkPayload[10] = a_lat[1];
+    uplinkPayload[11] = a_lat[0];
     uint8_t *a_lon = ByteConvert::varToArray<int>(s_lon,LoRaData.Lon);     
-    uplinkPayload[11] = a_lon[3];      
-    uplinkPayload[12] = a_lon[2];       
-    uplinkPayload[13] = a_lon[1];  
-    uplinkPayload[14] = a_lon[0];  
-    uplinkPayload[15] = highByte(LoRaData.Alt);
+    uplinkPayload[12] = a_lon[3];      
+    uplinkPayload[13] = a_lon[2];       
+    uplinkPayload[14] = a_lon[1];  
+    uplinkPayload[15] = a_lon[0];  
     uplinkPayload[16] = lowByte(LoRaData.Alt);
-    uplinkPayload[17] = LoRaData.Sat;
+    uplinkPayload[17] = highByte(LoRaData.Alt);
+    uplinkPayload[18] = LoRaData.Sat;
     uint8_t *a_time = ByteConvert::varToArray<int>(s_time,LoRaData.Time);
-    uplinkPayload[18] = a_time[3]; 
-    uplinkPayload[19] = a_time[2]; 
-    uplinkPayload[20] = a_time[1]; 
-    uplinkPayload[21] = a_time[0]; 
+    uplinkPayload[19] = a_time[3]; 
+    uplinkPayload[20] = a_time[2]; 
+    uplinkPayload[21] = a_time[1]; 
+    uplinkPayload[22] = a_time[0]; 
     state = node.sendReceive(uplinkPayload, sizeof(uplinkPayload));
     Serial.print("Data Sending : ");
     Serial.println(stateDecode(state)); 

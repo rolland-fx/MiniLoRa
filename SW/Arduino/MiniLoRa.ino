@@ -181,7 +181,8 @@ void setup() {
         if (gps.time.isValid() && gps.location.isValid()) {
           LiveData.Lon = gps.location.lng();
           LiveData.Lat = gps.location.lat();
-          LiveData.Alt = gps.altitude.meters();
+          if (gps.altitude.meters() > 32767) LiveData.Alt = 0;
+          else LiveData.Alt = (int16_t)gps.altitude.meters();
           LiveData.Sat = gps.satellites.value();
           rtc.setTime(gps.time.second(), gps.time.minute(), gps.time.hour(), gps.date.day(), gps.date.month(), gps.date.year());
           sprintf(LiveData.UTC,"%4d-%02d-%02dT%02d:%02d:%02dZ",gps.date.year(),gps.date.month(),gps.date.day(),gps.time.hour(),gps.time.minute(),gps.time.second());
@@ -220,7 +221,7 @@ void setup() {
   if (LORAWAN) {
     LoRaData.Temp = LiveData.Temp;
     LoRaData.Hum = LiveData.Hum;
-    LoRaData.Bat_vol = (uint8_t) map(LiveData.Bat_vol, 0, 4500, 0, 255);
+    LoRaData.Bat_vol = (uint8_t) map(LiveData.Bat_vol, 2500, 4300, 0, 255);
     LoRaData.Lum = LiveData.Lum;
     LoRaData.Acc_x = (uint8_t) map(LiveData.Acc_x, 0, 10000, 0, 255);
     LoRaData.Acc_y = (uint8_t) map(LiveData.Acc_y, 0, 10000, 0, 255);
@@ -229,7 +230,7 @@ void setup() {
     Lon_buffer =  LiveData.Lon* 1000000.0;
     LoRaData.Lat = (int32_t)Lat_buffer;
     LoRaData.Lon = (int32_t)Lon_buffer; 
-    LoRaData.Alt = (int16_t) LiveData.Alt;
+    LoRaData.Alt = LiveData.Alt;
     LoRaData.Sat = LiveData.Sat;
     LoRaData.Time = LiveData.Time;
     

@@ -4,7 +4,7 @@ function decodeUplink(input) {
   var data = {};
   data.Temperature = input.bytes[0];
   data.Humidity = input.bytes[1];
-  data.Bat_vol = input.bytes[2] * 17.647;
+  data.Bat_vol = (input.bytes[2] * 7.058)+2500;
   data.Luminosity =  ((input.bytes[4] << 8) + (input.bytes[3]))
   data.AccX = input.bytes[5] * 39.216;
   data.AccY = input.bytes[6] * 39.216;

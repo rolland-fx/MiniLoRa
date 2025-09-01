@@ -99,9 +99,9 @@ double Lon_buffer;
 
 uint16_t Lum_man;
 uint16_t Lum_exp;
-
-I2CGPS myI2CGPS;
 TinyGPSPlus gps;
+I2CGPS myI2CGPS;
+
 esp_sleep_wakeup_cause_t wakeup_reason;
 
 
@@ -120,6 +120,10 @@ void setup() {
   gpio_hold_dis(BLUE);
   gpio_hold_dis(LORA_RST);
   gpio_hold_dis(BAT_ON);
+    if (GNSS) {
+    digitalWrite(GNSS_RST, HIGH);
+    delay(100);
+    }
   wakeup_reason = esp_sleep_get_wakeup_cause();
   if (DEBUG) {
     Serial.begin(115200);
@@ -133,8 +137,6 @@ void setup() {
   Wire.begin();
   digitalWrite(BLUE, LOW);
   if (GNSS) {
-    digitalWrite(GNSS_RST, HIGH);
-    delay(100);
     Wire.beginTransmission(0x10);
     Wire.write((uint8_t*)GNSS_MID_POWER, 20);
     Wire.endTransmission();
@@ -172,7 +174,8 @@ void setup() {
   if (GNSS) {
     uint8_t turn = 0;
     myI2CGPS.begin();
-    while (!gps.location.isValid() || turn < 5)
+    delay(500);
+    while ((!gps.location.isValid()) || (turn < 5) || (gps.satellites.value() <= 6))
     {
        while (myI2CGPS.available() )  //available() returns the number of new bytes available from the GPS module
       {

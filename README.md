@@ -110,11 +110,11 @@ Here are the idea for the next improvement and developpement :
 ### Hardware
 
 * Size can me optimized
-* I2C pads for external sensors
-* External GGPIO (one or two) for remote trigger
+* ~~I2C pads for external sensors~~
+* ~~External GGPIO (one or two) for remote trigger~~
 * External BMS for energy harversting
-* Pressure sensor (or Temp / Hum / Pressure)
-* 1-PPS connection to MCU from GNSS for NTP via WiFi 
+* ~~Pressure sensor (or Temp / Hum / Pressure)~~
+* ~~1-PPS connection to MCU from GNSS for NTP via WiFi~~
 * GNSS module with external flat antenna
 
 

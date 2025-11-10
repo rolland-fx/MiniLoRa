@@ -23,6 +23,7 @@ Small size multi-purpose **ESP32-C6** board with **LoRa** and **2.4 GHz** connec
 
 * Low power consumption for long battery life
 * Multiple wireless connectivity
+* Sensors packed
 * Small size
 
 ### Features
@@ -39,11 +40,12 @@ Small size multi-purpose **ESP32-C6** board with **LoRa** and **2.4 GHz** connec
 * LoRa modem -> <a href="./DOC/Datasheets/Wio-SX1262_Module.pdf">WIO-SX1262</a>
   * LoRaWan capable
   * External Antenna
-* GNSS with integrated antenna -> <a href="./DOC/Datasheets/CD-PA1010D.pdf">CD-PA1010D</a>
-* Temperature and humidity sensor -> <a href="./DOC/Datasheets/Sensirion_SHT4x.pdf">SHT4X</a>
+* GNSS with integrated antenna and PPS -> <a href="./DOC/Datasheets/CD-PA1010D.pdf">CD-PA1010D</a>
+* Temperature, humidity and pressure sensor -> <a href="./DOC/Datasheets/bst-bme280-ds002.pdf">BME280</a>
 * Luminosity sensor -> <a href="./DOC/Datasheets/opt3001.pdf">OPT3001</a>
 * 3-axis accelerometer -> <a href="./DOC/Datasheets/lis3dh.pdf">LIS3DH</a>
-* 2 user accessible LED
+* External connector with : Power, I2C and 1 GPIO
+* 1 user accessible LED
 * 1 user accessible button
 * Voltage reading of the battery
 * Integrated BMS and JST connector
@@ -92,7 +94,7 @@ I2C adresses of sensors :
 | --- | --- |
 | GNSS | 0x10 |
 | ACC | 0x19 |
-| TEMP | 0x44 |
+| TEMP | 0x76 |
 | LUM | 0x47 |
 
 ## 🚀To Do and Next Steps
@@ -102,7 +104,7 @@ Here are the idea for the next improvement and developpement :
 ### Software
 
 * Create a first full version in Arduino
-* Create a better / smaller / mor realiable version directly with FreeRTOS
+* Create a better / smaller / mor realiable version directly with FreeRTOS / Zephyr
 * User inteface with one button
 * BLE app for phones and PC
 * App for configuration via USB-C
@@ -110,11 +112,7 @@ Here are the idea for the next improvement and developpement :
 ### Hardware
 
 * Size can me optimized
-* ~~I2C pads for external sensors~~
-* ~~External GGPIO (one or two) for remote trigger~~
 * External BMS for energy harversting
-* ~~Pressure sensor (or Temp / Hum / Pressure)~~
-* ~~1-PPS connection to MCU from GNSS for NTP via WiFi~~
 * GNSS module with external flat antenna
 
 

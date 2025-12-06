@@ -93,7 +93,7 @@ I2C adresses of sensors :
 | Sensor| ADD|
 | --- | --- |
 | GNSS | 0x10 |
-| ACC | 0x19 |
+| ACC | 0x18 |
 | TEMP | 0x76 |
 | LUM | 0x47 |
 

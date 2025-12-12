@@ -115,9 +115,9 @@ Here are the idea for the next improvement and developpement :
 * GNSS module with external flat antenna
 * Replace JST 2.0 by PH1.25 for the Battery connector
 * Replace XIAO module par self-made ESP32C6 module
- * Remove 2.4 GHz switch to get back 2 GPIO
- * Replace BMS for solar cell use and faster charge : CN3165
- * Chose either chip antenna or external connector 
+  * Remove 2.4 GHz switch to get back 2 GPIO
+  * Replace BMS for solar cell use and faster charge : CN3165
+  * Chose either chip antenna or external connector 
 
 
 

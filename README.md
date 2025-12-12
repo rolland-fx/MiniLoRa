@@ -1,6 +1,6 @@
 # Introduction
 
-<a href="url"><img src="./PIC/MiniLoRa-pic.png" height="auto" width="auto" style="border-radius:40px"></a>
+<a href="url"><img src="./PIC/MiniLoRa-pic.jpg" height="auto" width="auto" style="border-radius:40px"></a>
 
 ---
 <!---

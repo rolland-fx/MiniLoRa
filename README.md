@@ -30,7 +30,7 @@ Small size multi-purpose **ESP32-C6** board with **LoRa** and **2.4 GHz** connec
 
 * ESP32-C6 -> <a href="./DOC/Datasheets/esp32-c6.pdf">XIAO-ESP32C6</a>
   * 32 bits RISC-V Main processor : 160 MHz
-  * 32 bits RISC-V Low power processor : 20 Mhz
+  * 32 bits RISC-V Low power processor : 20 MHz
   * 512 KB RAM
   * 4 MB FLASH
   * Wi-Fi 6 (2.4 GHz)
@@ -112,9 +112,12 @@ Here are the idea for the next improvement and developpement :
 ### Hardware
 
 * Size can me optimized
-* External BMS for energy harversting
 * GNSS module with external flat antenna
 * Replace JST 2.0 by PH1.25 for the Battery connector
+* Replace XIAO module par self-made ESP32C6 module
+ * Remove 2.4 GHz switch to get back 2 GPIO
+ * Replace BMS for solar cell use and faster charge : CN3165
+ * Chose either chip antenna or external connector 
 
 
 

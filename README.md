@@ -97,17 +97,37 @@ I2C adresses of sensors :
 | TEMP | 0x76 |
 | LUM | 0x47 |
 
+GPIO Mapping
+
+| GPIO| Usage|
+| --- | --- |
+| 1 | x |
+| 2 | y |
+| 3 | z |
+| 4 | w |
+
+
 ## 🚀To Do and Next Steps
 
 Here are the idea for the next improvement and developpement :
 
 ### Software
 
-* Create a first full version in Arduino
-* Create a better / smaller / mor realiable version directly with FreeRTOS / Zephyr
-* User inteface with one button
-* BLE app for phones and PC
-* App for configuration via USB-C
+* Create a first full version in Arduino : Mostly done.
+* Architecture
+  * Create a core with FreeRTOS or Zephyr
+  * Create drivers for all HW
+  * Init routine and deep sleep related routine
+* Possible SW usage
+  * Very long battery life LoRaWAN tracker (all sensors)
+  * NTP (GPS with PPS) Wi-Fi server
+  * Indoor Zigbee / Wi-Fi / BLE sensor (all but GPS)
+  * Outdoor environmental sensor (all sensors)
+  * Anti-theft device (interupt on Acc + all Radios)
+* Other related SW
+  * BLE App for configuration
+  * USB-C (serial) App for configuration  
+
 
 ### Hardware
 
@@ -115,6 +135,7 @@ Here are the idea for the next improvement and developpement :
 * GNSS module with external flat antenna
 * Replace JST 2.0 by PH1.25 for the Battery connector
 * Replace XIAO module par self-made ESP32C6 module
+  * Use ESP32-C6FH8 -> 8 MB of FLASH
   * Remove 2.4 GHz switch to get back 2 GPIO
   * Replace BMS for solar cell use and faster charge : CN3165
   * Chose either chip antenna or external connector 

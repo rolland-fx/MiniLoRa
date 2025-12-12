@@ -114,6 +114,7 @@ Here are the idea for the next improvement and developpement :
 * Size can me optimized
 * External BMS for energy harversting
 * GNSS module with external flat antenna
+* Replace JST 2.0 by PH1.25 for the Battery connector
 
 
 

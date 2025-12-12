@@ -101,10 +101,25 @@ GPIO Mapping
 
 | GPIO| Usage|
 | --- | --- |
-| 1 | x |
-| 2 | y |
-| 3 | z |
-| 4 | w |
+| 0 | WakeUp GPS |
+| 1 | LoRa Busy |
+| 2 | LoRa Reset |
+| 3 | 2.4GHz switch EN |
+| 4 | PPS |
+| 5 | Bat. Analog  |
+| 6 | Bat. Reading En. AND External GPIO  |
+| 7 | User Button |
+| 8 | Not available on XIAO ESP32C6 Module |
+| 9 | Boot |
+| 14 | 2.4GHz switch Select |
+| 16 |  |
+| 17 |  |
+| 18 |  |
+| 19 |  |
+| 20 |  |
+| 21 |  |
+| 22 |  |
+| 23 |  |
 
 External Connector Mapping
 
@@ -116,7 +131,7 @@ External Connector Mapping
 | 2 | SCL |
 | 3 | SDA |
 | 4 | VCC |
-| 5 | GPIOx |
+| 5 | GPIO6 |
 
 
 ## 🚀To Do and Next Steps
@@ -150,6 +165,7 @@ Here are the idea for the next improvement and developpement :
 * Replace XIAO module par self-made ESP32C6 module
   * Use ESP32-C6FH8 -> 8 MB of FLASH
   * Remove 2.4 GHz switch to get back 2 GPIO
+  * GPIO 8 may be usable again
   * Replace BMS for solar cell use and faster charge : CN3165
   * Chose either chip antenna or external connector 
 

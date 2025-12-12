@@ -113,8 +113,8 @@ External Connector Mapping
 | Pin | Usage|
 | --- | --- |
 | 1 | GND |
-| 2 | SDA |
-| 3 | SCL |
+| 2 | SCL |
+| 3 | SDA |
 | 4 | VCC |
 | 5 | GPIOx |
 

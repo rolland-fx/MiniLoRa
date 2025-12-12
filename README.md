@@ -88,7 +88,7 @@ Design with FreeCad 1.0
 
 ## 💾 Software Overview
 
-I2C adresses of sensors :
+I2C adresses of sensors
 
 | Sensor| ADD|
 | --- | --- |
@@ -105,6 +105,18 @@ GPIO Mapping
 | 2 | y |
 | 3 | z |
 | 4 | w |
+
+External Connector Mapping
+
+1 is defined as the squared one, closest to J3 marking 
+
+| Pin | Usage|
+| --- | --- |
+| 1 | GND |
+| 2 | SDA |
+| 3 | SCL |
+| 4 | VCC |
+| 5 | GPIOx |
 
 
 ## 🚀To Do and Next Steps
@@ -134,6 +146,7 @@ Here are the idea for the next improvement and developpement :
 * Size can me optimized
 * GNSS module with external flat antenna
 * Replace JST 2.0 by PH1.25 for the Battery connector
+* Better thermal isolation for BME280
 * Replace XIAO module par self-made ESP32C6 module
   * Use ESP32-C6FH8 -> 8 MB of FLASH
   * Remove 2.4 GHz switch to get back 2 GPIO

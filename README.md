@@ -150,7 +150,9 @@ Here are the idea for the next improvement and developpement :
 * Architecture
   * Create a core with FreeRTOS or Zephyr
   * Create drivers for all HW
+  * File system for sys. files and data files
   * Init routine and deep sleep related routine
+  * "1 Button, 1 LED" interface
 * Possible SW usage
   * Very long battery life LoRaWAN tracker (all sensors)
   * NTP (GPS with PPS) Wi-Fi server

@@ -156,6 +156,7 @@ Here are the idea for the next improvement and developpement :
   * NTP (GPS with PPS) Wi-Fi server
   * Indoor Zigbee / Wi-Fi / BLE sensor (all but GPS)
   * Outdoor environmental sensor (all sensors)
+  * Outdoor offline sensor logging (Storage to FLASH)
   * Anti-theft device (interupt on Acc + all Radios)
 * Other related SW
   * BLE App for configuration

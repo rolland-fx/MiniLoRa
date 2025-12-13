@@ -167,6 +167,7 @@ Here are the idea for the next improvement and developpement :
 * Size can me optimized
 * GNSS module with external flat antenna
 * Replace JST 2.0 by PH1.25 for the Battery connector
+* Replace External connector by 1.25mm pitch connector
 * Better thermal isolation for BME280
 * Replace XIAO module par self-made ESP32C6 module
   * Use ESP32-C6FH8 -> 8 MB of FLASH

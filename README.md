@@ -107,7 +107,7 @@ GPIO Mapping
 | 2 | LoRa Reset | X | X | X | |
 | 3 | 2.4GHz switch EN | X | X | X | |
 | 4 | PPS | X | X | X | |
-| 5 | Bat. Analog  | X |X | X | read Vbat/2 when active |
+| 5 | Bat. Analog  | X |X | X | Read Vbat/2 when active |
 | 6 | Bat. Reading En. + External GPIO  | X | X | X | Use to activate External GPIO and EN. Bat reading |
 | 7 | User Button | X |  | X | |
 | 8 | Not available on XIAO ESP32C6 Module| | | | Strapping pin, HW pull-UP |
@@ -125,7 +125,7 @@ GPIO Mapping
 | 21 | LoRa RF Switch | X | | | |
 | 22 | I2C SDA | X | | | |
 | 23 | i2C SPI | X | | | |
-| 24 - 30| Internal SPI FLASH | | |Not exposed|
+| 24 - 30| Internal SPI FLASH | | | Not exposed|
 
 External Connector Mapping
 

@@ -33,6 +33,7 @@ Small size multi-purpose **ESP32-C6** board with **LoRa** and **2.4 GHz** connec
   * 32 bits RISC-V Low power processor : 20 MHz
   * 512 KB RAM
   * 4 MB FLASH
+  * RTC
   * Wi-Fi 6 (2.4 GHz)
   * Bluetooth 5 (BLE)
   * Zigbee / Matter / Thread (802.15.4)
@@ -102,24 +103,25 @@ GPIO Mapping
 | GPIO| Usage|
 | --- | --- |
 | 0 | WakeUp GPS |
-| 1 | LoRa Busy |
+| 1 | LoRa Busy + ACC Interupt |
 | 2 | LoRa Reset |
 | 3 | 2.4GHz switch EN |
 | 4 | PPS |
 | 5 | Bat. Analog  |
-| 6 | Bat. Reading En. AND External GPIO  |
+| 6 | Bat. Reading En. + External GPIO  |
 | 7 | User Button |
 | 8 | Not available on XIAO ESP32C6 Module |
 | 9 | Boot |
 | 14 | 2.4GHz switch Select |
-| 16 |  |
-| 17 |  |
-| 18 |  |
-| 19 |  |
-| 20 |  |
-| 21 |  |
-| 22 |  |
-| 23 |  |
+| 15 | Orange LED |
+| 16 | LoRa DIO1 |
+| 17 | LoRa SPI Select |
+| 18 | SPI MOSI |
+| 19 | SPI SCK |
+| 20 | SPI MISO |
+| 21 | LoRa RF Switch |
+| 22 | I2C SDA |
+| 23 | i2C SPI |
 
 External Connector Mapping
 

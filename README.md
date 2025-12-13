@@ -125,7 +125,7 @@ GPIO Mapping
 | 21 | LoRa RF Switch |
 | 22 | I2C SDA |
 | 23 | i2C SPI |
-| 24 - 30| Interal SPI FLASH |
+| 24 - 30| Internal SPI FLASH |
 
 External Connector Mapping
 

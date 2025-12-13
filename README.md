@@ -100,31 +100,31 @@ I2C adresses of sensors
 
 GPIO Mapping
 
-| GPIO| Usage| ADC ? | LP GPIO ?|
-| --- | --- | --- | --- |
-| 0 | WakeUp GPS | X | X |
-| 1 | LoRa Busy + ACC Interupt | X | X |
-| 2 | LoRa Reset | X | X |
-| 3 | 2.4GHz switch EN | X | X |
-| 4 | PPS | X | X |
-| 5 | Bat. Analog  | X | X |
-| 6 | Bat. Reading En. + External GPIO  | X | X |
-| 7 | User Button |  | X |
-| 8 | Not available on XIAO ESP32C6 Module | | |
-| 9 | Boot | | |
-| 10-11 | N/A on ESP32C6 with Inc. FLASH| | |
-| 12 | USB DN | | |
-| 13 | USB DP | | |
-| 14 | 2.4GHz switch Select | | |
-| 15 | Orange LED | | |
-| 16 | LoRa DIO1 | | |
-| 17 | LoRa SPI Select | | |
-| 18 | SPI MOSI | | |
-| 19 | SPI SCK | | |
-| 20 | SPI MISO | | |
-| 21 | LoRa RF Switch | | |
-| 22 | I2C SDA | | |
-| 23 | i2C SPI | | |
+| GPIO| Usage| Usage in SW ? | ADC ? | LP GPIO ?|
+| --- | --- | --- | --- | --- |
+| 0 | WakeUp GPS | X | X | X |
+| 1 | LoRa Busy + ACC Interupt | X | X | X |
+| 2 | LoRa Reset | X | X | X |
+| 3 | 2.4GHz switch EN | X | X | X |
+| 4 | PPS | X | X | X |
+| 5 | Bat. Analog  | X |X | X |
+| 6 | Bat. Reading En. + External GPIO  | X | X | X |
+| 7 | User Button | X |  | X |
+| 8 | Not available on XIAO ESP32C6 Module| | | |
+| 9 | Boot| | | |
+| 10-11 | N/A on ESP32C6 with Inc. FLASH| | | |
+| 12 | USB DN| | | |
+| 13 | USB DP| | | |
+| 14 | 2.4GHz switch Select| X | | |
+| 15 | Orange LED| X | | |
+| 16 | LoRa DIO1 | X | | |
+| 17 | LoRa SPI Select | X | | |
+| 18 | SPI MOSI | X | | |
+| 19 | SPI SCK | X | | |
+| 20 | SPI MISO | X | | |
+| 21 | LoRa RF Switch | X | | |
+| 22 | I2C SDA | X | | |
+| 23 | i2C SPI | X | | |
 | 24 - 30| Internal SPI FLASH | | |
 
 External Connector Mapping

@@ -100,7 +100,7 @@ I2C adresses of sensors
 
 GPIO Mapping
 
-| GPIO| Usage| Usage in SW ? | ADC ? | LP GPIO ?| Note|
+| GPIO| Usage| Usable in SW ? | ADC ? | LP GPIO ?| Note|
 | --- | --- | --- | --- | --- |---|
 | 0 | WakeUp GNSS | X | X | X | |
 | 1 | LoRa Busy + ACC Interupt | X | X | X | Mixed both signal|

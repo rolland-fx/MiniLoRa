@@ -112,6 +112,9 @@ GPIO Mapping
 | 7 | User Button |
 | 8 | Not available on XIAO ESP32C6 Module |
 | 9 | Boot |
+| 10-11 | N/A on ESP32C6 with Inc. FLASH|
+| 12 | USB DN |
+| 13 | USB DP |
 | 14 | 2.4GHz switch Select |
 | 15 | Orange LED |
 | 16 | LoRa DIO1 |
@@ -122,6 +125,7 @@ GPIO Mapping
 | 21 | LoRa RF Switch |
 | 22 | I2C SDA |
 | 23 | i2C SPI |
+| 24 - 30| Interal SPI FLASH |
 
 External Connector Mapping
 

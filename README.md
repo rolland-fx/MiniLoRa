@@ -100,32 +100,32 @@ I2C adresses of sensors
 
 GPIO Mapping
 
-| GPIO| Usage| Usage in SW ? | ADC ? | LP GPIO ?|
-| --- | --- | --- | --- | --- |
-| 0 | WakeUp GPS | X | X | X |
-| 1 | LoRa Busy + ACC Interupt | X | X | X |
-| 2 | LoRa Reset | X | X | X |
-| 3 | 2.4GHz switch EN | X | X | X |
-| 4 | PPS | X | X | X |
-| 5 | Bat. Analog  | X |X | X |
-| 6 | Bat. Reading En. + External GPIO  | X | X | X |
-| 7 | User Button | X |  | X |
-| 8 | Not available on XIAO ESP32C6 Module| | | |
-| 9 | Boot| | | |
-| 10-11 | N/A on ESP32C6 with Inc. FLASH| | | |
-| 12 | USB DN| | | |
-| 13 | USB DP| | | |
-| 14 | 2.4GHz switch Select| X | | |
-| 15 | Orange LED| X | | |
-| 16 | LoRa DIO1 | X | | |
-| 17 | LoRa SPI Select | X | | |
-| 18 | SPI MOSI | X | | |
-| 19 | SPI SCK | X | | |
-| 20 | SPI MISO | X | | |
-| 21 | LoRa RF Switch | X | | |
-| 22 | I2C SDA | X | | |
-| 23 | i2C SPI | X | | |
-| 24 - 30| Internal SPI FLASH | | |
+| GPIO| Usage| Usage in SW ? | ADC ? | LP GPIO ?| Note|
+| --- | --- | --- | --- | --- |---|
+| 0 | WakeUp GNSS | X | X | X | |
+| 1 | LoRa Busy + ACC Interupt | X | X | X | Mixed both signal|
+| 2 | LoRa Reset | X | X | X | |
+| 3 | 2.4GHz switch EN | X | X | X | |
+| 4 | PPS | X | X | X | |
+| 5 | Bat. Analog  | X |X | X | read Vbat/2 when active |
+| 6 | Bat. Reading En. + External GPIO  | X | X | X | Use to activate External GPIO and EN. Bat reading |
+| 7 | User Button | X |  | X | |
+| 8 | Not available on XIAO ESP32C6 Module| | | | Strapping pin, HW pull-UP |
+| 9 | Boot| | | | |
+| 10-11 | N/A on ESP32C6 with Inc. FLASH| | | | |
+| 12 | USB DN| | | | Used for serial and prog. |
+| 13 | USB DP| | | | Used for serial and prog. |
+| 14 | 2.4GHz switch Select| X | | | |
+| 15 | Orange LED| X | | | |
+| 16 | LoRa DIO1 | X | | | |
+| 17 | LoRa SPI Select | X | | | |
+| 18 | SPI MOSI | X | | | |
+| 19 | SPI SCK | X | | | |
+| 20 | SPI MISO | X | | | |
+| 21 | LoRa RF Switch | X | | | |
+| 22 | I2C SDA | X | | | |
+| 23 | i2C SPI | X | | | |
+| 24 - 30| Internal SPI FLASH | | |Not exposed|
 
 External Connector Mapping
 

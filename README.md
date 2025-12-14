@@ -154,10 +154,10 @@ Here are the idea for the next improvement and developpement :
   * Init routine and deep sleep related routine
   * "1 Button, 1 LED" interface
 * Possible SW usage
-  * Very long battery life LoRaWAN tracker (all sensors)
+  * Very long battery life LoRaWAN tracker (all sensors) + reverse channel
   * NTP (GPS with PPS) Wi-Fi server
-  * Indoor Zigbee / Wi-Fi / BLE sensor (all but GPS)
-  * Outdoor environmental sensor (all sensors)
+  * Indoor Zigbee / Wi-Fi / BLE sensor (all but GPS)  + reverse channel
+  * Outdoor environmental sensor (all sensors)  + reverse channel
   * Outdoor offline sensor logging (Storage to FLASH)
   * Anti-theft device (interupt on Acc + all Radios)
 * Other related SW

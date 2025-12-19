@@ -106,9 +106,9 @@ GPIO Mapping
 | 1 | LoRa Busy + ACC Interupt | X | X | X | Mixed both signal|
 | 2 | LoRa Reset | X | X | X | |
 | 3 | 2.4 GHz switch EN | X | X | X | |
-| 4 | PPS | X | X | X | |
+| 4 | Bat. Reading En. + External GPIO  | X | X | X | Use to activate External GPIO and EN. Bat reading |
 | 5 | Bat. Analog  | X |X | X | Read Vbat/2 when active |
-| 6 | Bat. Reading En. + External GPIO  | X | X | X | Use to activate External GPIO and EN. Bat reading |
+| 6 | PPS | X | X | X | |
 | 7 | User Button | X |  | X | |
 | 8 | Not available on XIAO ESP32C6 Module| | | | Strapping pin, HW pull-UP |
 | 9 | Boot| | | | |

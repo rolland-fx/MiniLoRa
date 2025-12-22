@@ -122,7 +122,7 @@ GPIO Mapping
 | 18 | SPI MOSI | X | | | |
 | 19 | SPI SCK | X | | | |
 | 20 | SPI MISO | X | | | |
-| 21 | LoRa RF Switch | X | | | |
+| 21 | LoRa RF Switch | X | | |Actually useless. GPIO will be reused in next version |
 | 22 | I2C SDA | X | | | |
 | 23 | i2C SPI | X | | | |
 | 24 - 30| Internal SPI FLASH | | | | Not exposed|

@@ -172,11 +172,12 @@ Here are the idea for the next improvement and developpement :
 * Replace JST 2.0 by PH1.25 for the Battery connector
 * Replace External connector by 1.25mm pitch connector
 * Better thermal isolation for BME280
-* Replace XIAO module par self-made ESP32C6 module
+* Sx1262 RF_SWITCH (GPIO 21) is not needed and can be used for something else.
+* Replace XIAO module par self-made ESP32C6 module -> BIG WORK
   * Use ESP32-C6FH8 -> 8 MB of FLASH
   * Remove 2.4 GHz switch to get back 2 GPIO
   * GPIO 8 : could be used for an OUTPUT (to avoid strapping issue)
-  * Replace BMS for solar cell use and faster charge : CN3165
+  * Replace BMS for solar cell use and faster charge : CN3165 or keeping the same, but change the cabling
   * Chose either chip antenna or external connector 
 
 

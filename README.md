@@ -171,6 +171,9 @@ Here are the idea for the next improvement and developpement :
 * GNSS module with external flat antenna
 * Replace JST 2.0 by PH1.25 for the Battery connector
 * Replace External connector by 1.25mm pitch connector
+  * GND + VCC
+  * I2C
+  * 2 GPIOs (probably one shared with another thing and one dedicated)   
 * Better thermal isolation for BME280
 * Sx1262 RF_SWITCH (GPIO 21) is not needed and can be used for something else.
 * Replace XIAO module par self-made ESP32C6 module -> BIG WORK

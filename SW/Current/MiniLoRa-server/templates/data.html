@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Data — {{ device_id }} — MiniLoRa-server{% endblock %}
+{% block content %}
+<h1>Data — {{ device_id }}</h1>
+{% if is_group %}<p class="muted">Merged view — {{ group_members|length }}
+  identities ({% for m in group_members %}{{ m.device_id }}{{ ", " if not loop.last }}{% endfor %})
+  mixed into one timeline; the <code>src</code> column shows which transport
+  delivered each row.</p>{% endif %}
+{% include "_device_tabs.html" with context %}
+
+<h2>Maintenance</h2>
+<div class="panel">
+  <p class="muted">Fetch TTN uplinks now (the app's "fetch now": pulls the
+    last 12 h again — exact dedup, idempotent)
+    <button onclick="fetchNow(this)">Fetch now</button>
+    <span id="fetchMsg" class="muted"></span>
+  </p>
+  <p class="muted">Delete stored data older than:
+    <button onclick="prune('1h')">1 hour</button>
+    <button onclick="prune('1d')">1 day</button>
+    <button onclick="prune('1w')">1 week</button>
+    <button onclick="prune('30d')">30 days</button>
+    <button onclick="prune('all_but_last')">all but last</button>
+  </p>
+  <p class="muted">Danger zone — removes a device and <em>all</em> its data
+    (readings, diagnostics, registry). If the device reports again it appears
+    as a fresh entry.
+    {% if is_group %}A merged tracker is removed <em>per identity</em>:
+    {% for m in group_members %}<button class="danger"
+       onclick="deleteDevice({{ m.device_id | tojson }})">Delete {{ m.device_id }}</button>
+    {% endfor %}
+    {% else %}
+    <button class="danger" onclick="deleteDevice()">Delete device</button>
+    {% endif %}
+  </p>
+</div>
+
+<h2>Recent readings</h2>
+<table id="tbl">
+  <tr><th>Seen</th><th>GPS time</th><th>GPS date</th><th>°C</th><th>%</th><th>hPa</th><th>mV</th><th>lux</th>
+      <th>lat</th><th>lon</th><th>alt</th><th>sats</th><th>src</th></tr>
+  {% for r in readings|reverse %}
+  <tr>
+    <td>{{ r.seen_h }}</td>
+    <td>{{ r.gps_time or '—' }}</td>
+    <td>{{ r.gps_h or '—' }}</td>
+    <td>{{ r.temp_c }}</td><td>{{ r.hum_pct }}</td><td>{{ r.pressure_hpa }}</td>
+    <td>{{ r.bat_mv }}</td><td>{{ r.lux }}</td>
+    <td>{{ '%.5f'|format(r.latitude) if r.latitude is not none else '—' }}</td>
+    <td>{{ '%.5f'|format(r.longitude) if r.longitude is not none else '—' }}</td>
+    <td>{{ r.altitude_m }}</td><td>{{ r.sats }}</td><td>{{ r.source }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<script>
+const DEV_ID = {{ device_id | tojson }};
+const PRUNE_LABEL = { '1h': '1 hour', '1d': '1 day', '1w': '1 week',
+                      '30d': '30 days',
+                      'all_but_last': 'everything but the latest reading' };
+function prune(age) {
+  if (!confirm('Delete all ' + DEV_ID + ' data older than ' +
+               PRUNE_LABEL[age] + '?')) return;
+  fetch(`/api/device/${encodeURIComponent(DEV_ID)}/prune?older_than=${age}`,
+        { method: 'POST' })
+    .then(r => { if (r.ok) location.reload();
+                 else r.text().then(t => alert('Prune failed: ' + t)); });
+}
+async function fetchNow(btn) {
+  const msg = document.getElementById('fetchMsg');
+  btn.disabled = true;
+  msg.textContent = 'fetching…';
+  try {
+    const r = await fetch('/api/ttn/fetch-now', { method: 'POST' });
+    const j = await r.json();
+    if (!r.ok) {
+      msg.textContent = j.detail || ('failed: HTTP ' + r.status);
+      btn.disabled = false;
+      return;
+    }
+    msg.textContent = j.stored
+      ? j.stored + ' new frame(s) stored — reloading…'
+      : 'no new data — reloading…';
+    setTimeout(() => location.reload(), 900);
+  } catch (e) {
+    msg.textContent = 'failed: ' + e;
+    btn.disabled = false;
+  }
+}
+function deleteDevice(id) {
+  id = id || DEV_ID;
+  if (!confirm('Delete device "' + id + '" and ALL its data?\n' +
+               'This cannot be undone.')) return;
+  fetch('/api/device/' + encodeURIComponent(id), { method: 'DELETE' })
+    .then(r => { if (r.ok) location.href = '/';
+                 else r.text().then(t => alert('Delete failed: ' + t)); });
+}
+</script>
+{% endblock %}

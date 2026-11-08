@@ -1,0 +1,63 @@
+menu "MiniLoRa"
+
+    config MINILORA_FW_VERSION
+        string "Firmware version"
+        default "2.6.16"
+        help
+            Reported in the diagnostics uplink (fport 2) and in the BLE
+            advertisement. Bump on every release; the Android app and the
+            TTN decoder must stay in sync with the payload contract.
+
+    config MINILORA_GLOBAL_NAME
+        string "Default device name (BLE/LoRa)"
+        default "MiniLoRa-FX-1"
+
+    config MINILORA_GPS_WARM_ATTEMPTS
+        int "GPS warm-start fix budget (seconds)"
+        default 240
+        range 5 120
+        help
+            Seconds allotted to the GNSS on wakes from deep sleep (hot/warm
+            start when ephemeris and time are retained, TTFF typically 1-10 s;
+            after a long indoor spell the module restarts into a cold-ish
+            start, TTFF 30-35 s — the budget must cover that). Cold boots
+            (power-on) use the full 150 s budget. v1 parity: 60.
+
+    config MINILORA_GPS_BENCH
+        bool "GPS bench mode (USB diagnosis, NOT for field use)"
+        default n
+        help
+            Bench/debug builds only: every boot forces a long narrated GPS
+            window (min 300 s) regardless of the indoor backoff, and the
+            driver counts sentences / checksum failures while the window
+            logs satellite counts every 5 s. With battery disconnected and
+            USB power this turns the tracker into a live GNSS test bench.
+            Never ship with this enabled (no backoff = dead battery fast).
+
+    config MINILORA_BAT_LOW_MV
+        int "Low-battery threshold (mV) — degraded mode"
+        default 3500
+        help
+            Below this: no BLE beacon, no Zigbee, sleep interval doubled
+            (clamped to 120 min), GPS every other cycle.
+
+    config MINILORA_BAT_CRITICAL_MV
+        int "Critical-battery threshold (mV) — survival mode"
+        default 3300
+        help
+            Below this: GPS and sensors off except BME280, only a LoRaWAN
+            heartbeat uplink, sleep = 120 min. Config mode (long-press)
+            remains available.
+
+    config MINILORA_OTA_CHECK_EVERY
+        int "OTA check interval (boots, 0 = disabled)"
+        default 96
+        help
+            Query the MiniLoRa-server for a firmware update every N boots
+            (~daily at 15-30 min intervals). Requires the WiFi transport to
+            be configured with the server as wifiServerIP:port. An explicit
+            OTA_UPDATE remote command bypasses the interval (but never runs
+            in critical battery). The device pulls the image over HTTP and
+            SHA-256-verifies it before switching boot slots.
+
+endmenu

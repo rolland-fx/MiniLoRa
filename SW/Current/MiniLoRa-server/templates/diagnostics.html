@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Diagnostics {{ device_id }} — MiniLoRa-server{% endblock %}
+{% block content %}
+<h1>Diagnostics — {{ device_id }}</h1>
+{% set active = "Diagnostics" %}
+{% include "_device_tabs.html" %}
+{% if diags %}
+<table>
+  <tr><th>Seen</th><th>FW</th><th>Boots</th><th>Unexp. resets</th>
+      <th>GPS to</th><th>Join fail</th><th>Send fail</th><th>WiFi</th>
+      <th>Zigbee</th><th>Sensor</th><th>GPS fails</th><th>TTFF</th>
+      <th>Margin</th><th>GW</th><th>OTA</th><th>Power/Flags</th></tr>
+  {% for d in diags %}
+  {% set flags = [] %}
+  {% if d.power_flags is not none %}
+    {% if d.power_flags % 2 == 1 %}{% set _ = flags.append('LOW BAT') %}{% endif %}
+    {% if (d.power_flags // 2) % 2 == 1 %}{% set _ = flags.append('CRIT') %}{% endif %}
+    {% if (d.flags2 // 2) % 2 == 1 %}{% set _ = flags.append('OTA') %}{% endif %}
+    {% if (d.flags2 // 4) % 2 == 1 %}{% set _ = flags.append('RECOVERY') %}{% endif %}
+  {% endif %}
+  <tr class="{{ 'warn' if flags else '' }}">
+    <td>{{ d.seen_h }}</td>
+    <td>{{ d.fw_version }}</td>
+    <td>{{ d.boot_count }}</td><td>{{ d.unexpected_resets }}</td>
+    <td>{{ d.gps_timeouts }}</td><td>{{ d.lora_join_failures }}</td>
+    <td>{{ d.lora_send_failures }}</td><td>{{ d.wifi_failures }}</td>
+    <td>{{ d.zigbee_failures }}</td><td>{{ d.sensor_read_failures }}</td>
+    <td>{{ d.gps_consec_fails }}</td>
+    <td>{{ d.last_ttff if d.last_ttff is not none else '—' }}</td>
+    <td>{{ (d.link_margin ~ ' dB') if d.link_margin is not none else '—' }}</td>
+    <td>{{ d.gw_cnt if d.gw_cnt is not none else '—' }}</td>
+    <td>{{ {0:'', 1:'STAGED', 2:'NO SRV', 3:'DL FAIL', 4:'BAD IMG'}.get(d.ota_status, '—') if d.ota_status is not none else '—' }}</td>
+    <td>{{ (['%02x'|format(d.power_flags)] + flags)|join(' ') if flags else '%02x'|format(d.power_flags) }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="empty">No diagnostics frames yet. The device sends one every
+~16 boots, or on demand (Remote tab → Send diag, or TTN downlink
+<code>4D 02 00</code> on fPort 3).</p>
+{% endif %}
+
+<details class="field-guide">
+  <summary>What do these fields mean?</summary>
+  <table>
+    <tr><th style="width:140px">Field</th><th>Meaning</th></tr>
+    <tr><td>Seen</td><td>When the server received the frame. The diag goes out
+      <em>after</em> the telemetry of the same wake cycle, so its counters
+      already include that cycle. Diag frames arrive via LoRaWAN (fPort 2)
+      and, when WiFi is configured, also via the server's
+      <code>/diag</code> endpoint.</td></tr>
+    <tr><td>FW</td><td>Firmware version the device reported.</td></tr>
+    <tr><td>Boots</td><td>Total boot count — RTC-persistent, survives deep
+      sleep. Also drives the diag cadence (one diag every 16 boots). A
+      RESET_DIAG command keeps this counter.</td></tr>
+    <tr><td>Unexp. resets</td><td>Boots that did <em>not</em> wake from a
+      clean deep sleep — power loss, crash, watchdog, brown-out. Should
+      stay 0; a rising count points at a battery or hardware problem.</td></tr>
+    <tr><td>GPS to</td><td>Total GPS windows that ended without a fix
+      (timed out).</td></tr>
+    <tr><td>Join fail</td><td>Total LoRaWAN join failures. A few around
+      firmware updates are normal (dev/nonet salts change); a rising
+      trend means gateway/backhaul trouble or drained keys.</td></tr>
+    <tr><td>Send fail</td><td>Total LoRaWAN send failures
+      <em>after</em> a successful join.</td></tr>
+    <tr><td>WiFi</td><td>Total failed WiFi pushes (telemetry or diag) —
+      AP unreachable, wrong credentials, server down.</td></tr>
+    <tr><td>Zigbee</td><td>Total failed Zigbee publishes (join failures
+      included).</td></tr>
+    <tr><td>Sensor</td><td>Total sensor read failures (BME280 /
+      accelerometer). Occasional single hits are benign; every cycle
+      failing = wiring or driver issue.</td></tr>
+    <tr><td>GPS fails</td><td><em>Consecutive</em> GPS failures since the
+      last valid fix — resets to 0 on the next fix. This is the counter
+      the indoor backoff reacts to.</td></tr>
+    <tr><td>TTFF</td><td>Time-to-first-fix of the most recent successful
+      GPS window, in seconds (— = no fix since the last reset). Compare
+      against the configured GPS budget (warm 60 s / cold 150 s): a TTFF
+      near the budget means the window was nearly wasted.</td></tr>
+    <tr><td>Margin</td><td>LinkCheck margin of the diag uplink, in dB —
+      how much radio-link headroom remains (— / 255 = unknown). Positive
+      is good; ≈0 dB or negative means the gateway barely hears you
+      (antenna/placement problem).</td></tr>
+    <tr><td>GW</td><td>Gateways that heard the diag uplink (from the same
+      LinkCheck answer).</td></tr>
+    <tr><td>OTA</td><td>Result of the last firmware pull: <b>STAGED</b> =
+      valid image downloaded, switches on next reboot · <b>NO SRV</b> =
+      server unreachable · <b>DL FAIL</b> = download error · <b>BAD
+      IMG</b> = SHA-256 mismatch, image rejected (the running firmware is
+      untouched). Blank = no OTA activity.</td></tr>
+    <tr><td>Power/Flags</td><td>Raw powerFlags byte plus decoded chips:
+      <b>LOW BAT</b> = battery below the degraded threshold (3500 mV,
+      non-LoRa radios skipped) · <b>CRIT</b> = below the critical
+      threshold (3300 mV, LoRa only) · <b>OTA</b> = image pending
+      verification · <b>RECOVERY</b> = boot-loop guard active.</td></tr>
+  </table>
+  <p class="muted" style="margin-top:8px">All failure counters are
+  cumulative totals since the device last counted them — a
+  RESET_DIAG command (Remote tab → Reset counters, or TTN downlink
+  <code>4D 03 00</code>) clears everything except the boot count. The
+  exception is GPS fails, which is consecutive by definition.</p>
+</details>
+{% endblock %}

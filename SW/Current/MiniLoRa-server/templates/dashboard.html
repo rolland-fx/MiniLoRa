@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Devices</h1>
+{% if entries %}
+<table>
+  <tr><th>Device</th><th>Last seen</th><th>Identities</th><th></th></tr>
+  {% for e in entries %}
+  <tr>
+    <td><a class="dev" href="/device/{{ e.label }}">{{ e.label }}</a>
+        {% if e.kind == 'group' %}
+        <span class="muted">· {{ e.members|length }} transports</span>
+        {% endif %}</td>
+    <td>{{ e.last_seen_h }}</td>
+    <td>
+      {% for m in e.members %}
+      <a class="chip" href="/device/{{ m.device_id }}"
+         title="open {{ m.device_id }}">{{ m.device_id }}
+         <span class="muted">{{ m.last_source }} {{ m.last_seen_h }}</span></a>
+      {% endfor %}
+    </td>
+    <td><a href="/device/{{ e.label }}">open →</a></td>
+  </tr>
+  {% endfor %}
+</table>
+<p class="muted">Trackers reporting under several identities (the WiFi push
+name and the TTN device id) are grouped into one row — configure groups in
+config.toml's <code>[device_groups]</code>. Deletes live on each identity's
+Data page.</p>
+{% else %}
+<p class="empty">No data yet. Point the tracker's WiFi transport at this
+server (<code>POST /data</code>, 28-byte octet-stream) or configure the TTN
+poller/webhook — see README.md.</p>
+{% endif %}
+
+<h2>API</h2>
+<ul class="api">
+  <li><code>POST /data?device=NAME</code> — 28-byte telemetry push (device WiFi transport)</li>
+  <li><code>POST /api/ttn/webhook?token=…</code> — TTN v3 webhook target</li>
+  <li><code>GET /api/devices</code> · <code>GET /api/readings/{id}?limit=&amp;since=</code></li>
+  <li><code>GET /api/latest/{id}</code> · <code>GET /api/diagnostics/{id}</code></li>
+    <li><code>GET /ota/check?device=&amp;current=</code> · <code>GET /ota/download/{id}</code> — device OTA pull</li>
+  <li><a href="/ota">OTA firmware management</a> (upload / activate / notify)</li>
+  <li><a href="/api/docs">interactive API docs</a> (OpenAPI)</li>
+</ul>
+<script>
+{% endblock %}

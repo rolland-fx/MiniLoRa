@@ -1,0 +1,124 @@
+
+==== clean capture start 10:55:37 ====
+<<OPENED 11:00:21 (dtr-neutral)>>
+I (1826) app: bat 4224 mV (low=0 critical=0) reset=DEEPSLEEP
+I (1826) app: GPS skipped (indoor backoff, 5 consecutive fails)
+I (1826) app: gps decision: run=0 budget=15 consecFails=5 boot=36 batLow=0
+<<READ ERROR 11:00:25>>
+<<OPENED 11:05:25 (dtr-neutral)>>
+I (464) esp_image: segment 4: paddr=001dd994 vaddr=40827750 size=03f80h ( 16256) load
+I (468) esp_image: segment 5: paddr=001e191c vaddr=50000000 size=001e0h (   480) 
+I (478) boot: Loaded app from partition at offset 0x20000
+I (478) boot: Disabling RNG early entropy source...
+I (489) cpu_start: Unicore app
+I (498) cpu_start: Pro cpu start user code
+I (498) cpu_start: cpu freq: 160000000 Hz
+I (498) app_init: Application information:
+I (498) app_init: Project name:     minilora
+I (502) app_init: App version:      Before-Rework-41-gcc0bab9-dirty
+I (508) app_init: Compile time:     Nov  1 2026 10:20:07
+I (513) app_init: ELF file SHA256:  5ea624191...
+I (517) app_init: ESP-IDF:          v5.5.1
+I (521) efuse_init: Min chip rev:     v0.0
+I (525) efuse_init: Max chip rev:     v0.99 
+I (529) efuse_init: Chip rev:         v0.2
+I (533) heap_init: Initializing. RAM available for dynamic allocation:
+I (539) heap_init: At 40836FB0 len 00045660 (277 KiB): RAM
+I (544) heap_init: At 4087C610 len 00002F54 (11 KiB): RAM
+I (549) heap_init: At 500001E0 len 00003E08 (15 KiB): RTCRAM
+I (555) spi_flash: detected chip: generic
+I (558) spi_flash: flash io: dio
+I (562) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (568) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (574) coexist: coex firmware version: b0bcc39
+I (578) coexist: coexist rom version 5b8dcfa
+I (583) main_task: Started on CPU0
+I (585) main_task: Calling app_main()
+I (589) app: MiniLoRa v2.6.0 boot (reset reason: 8)
+I (594) app: cycle start (wake=4 motion=0 recovery=0)
+I (607) store: no config yet — defaults
+I (607) app: cfg: src=defaults? range=4 gnss=1 lora=1 ble=1 wifi=0 asset=0
+I (1813) app: bat 4222 mV (low=0 critical=0) reset=DEEPSLEEP
+I (1813) app: GPS skipped (indoor backoff, 5 consecutive fails)
+I (1813) app: gps decision: run=0 budget=15 consecFails=5 boot=37 batLow=0
+<<READ ERROR 11:05:28>>
+<<OPENED 11:10:28 (dtr-neutral)>>
+I (521) efuse_init: Min chip rev:     v0.0
+I (525) efuse_init: Max chip rev:     v0.99 
+I (529) efuse_init: Chip rev:         v0.2
+I (533) heap_init: Initializing. RAM available for dynamic allocation:
+I (539) heap_init: At 40836FB0 len 00045660 (277 KiB): RAM
+I (544) heap_init: At 4087C610 len 00002F54 (11 KiB): RAM
+I (549) heap_init: At 500001E0 len 00003E08 (15 KiB): RTCRAM
+I (555) spi_flash: detected chip: generic
+I (558) spi_flash: flash io: dio
+I (562) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (568) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (574) coexist: coex firmware version: b0bcc39
+I (578) coexist: coexist rom version 5b8dcfa
+I (583) main_task: Started on CPU0
+I (585) main_task: Calling app_main()
+I (589) app: MiniLoRa v2.6.0 boot (reset reason: 8)
+I (594) app: cycle start (wake=4 motion=0 recovery=0)
+I (606) store: no config yet — defaults
+I (606) app: cfg: src=defaults? range=4 gnss=1 lora=1 ble=1 wifi=0 asset=0
+I (1812) app: bat 4223 mV (low=0 critical=0) reset=DEEPSLEEP
+I (1812) app: GPS skipped (indoor backoff, 5 consecutive fails)
+I (1812) app: gps decision: run=0 budget=15 consecFails=5 boot=38 batLow=0
+<<READ ERROR 11:10:31>>
+<<OPENED 11:15:32 (dtr-neutral)>>
+I (1826) app: bat 4223 mV (low=0 critical=0) reset=DEEPSLEEP
+I (1826) app: GPS skipped (indoor backoff, 5 consecutive fails)
+I (1826) app: gps decision: run=0 budget=15 consecFails=5 boot=39 batLow=0
+<<READ ERROR 11:15:35>>
+<<OPENED 11:20:35 (dtr-neutral)>>
+I (1826) app: bat 4227 mV (low=0 critical=0) reset=DEEPSLEEP
+I (1826) app: gps decision: run=1 budget=15 consecFails=5 boot=40 batLow=0
+W (20763) app: GPS timeout after 15 iterations
+<<READ ERROR 11:20:55>>
+<<OPENED 11:25:55 (dtr-neutral)>>
+ing. RAM available for dynamic allocation:
+I (539) heap_init: At 40836FB0 len 00045660 (277 KiB): RAM
+I (544) heap_init: At 4087C610 len 00002F54 (11 KiB): RAM
+I (549) heap_init: At 500001E0 len 00003E08 (15 KiB): RTCRAM
+I (555) spi_flash: detected chip: generic
+I (558) spi_flash: flash io: dio
+I (562) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (568) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (574) coexist: coex firmware version: b0bcc39
+I (578) coexist: coexist rom version 5b8dcfa
+I (583) main_task: Started on CPU0
+I (585) main_task: Calling app_main()
+I (589) app: MiniLoRa v2.6.0 boot (reset reason: 8)
+I (594) app: cycle start (wake=4 motion=0 recovery=0)
+I (606) store: no config yet — defaults
+I (606) app: cfg: src=defaults? range=4 gnss=1 lora=1 ble=1 wifi=0 asset=0
+I (1812) app: bat 4220 mV (low=0 critical=0) reset=DEEPSLEEP
+I (1812) app: GPS skipped (indoor backoff, 6 consecutive fails)
+I (1812) app: gps decision: run=0 budget=15 consecFails=6 boot=41 batLow=0
+<<READ ERROR 11:25:58>>
+<<OPENED 11:30:58 (dtr-neutral)>>
+I (517) app_init: ESP-IDF:          v5.5.1
+I (521) efuse_init: Min chip rev:     v0.0
+I (525) efuse_init: Max chip rev:     v0.99 
+I (529) efuse_init: Chip rev:         v0.2
+I (533) heap_init: Initializing. RAM available for dynamic allocation:
+I (539) heap_init: At 40836FB0 len 00045660 (277 KiB): RAM
+I (544) heap_init: At 4087C610 len 00002F54 (11 KiB): RAM
+I (549) heap_init: At 500001E0 len 00003E08 (15 KiB): RTCRAM
+I (555) spi_flash: detected chip: generic
+I (558) spi_flash: flash io: dio
+I (562) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (568) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (574) coexist: coex firmware version: b0bcc39
+I (578) coexist: coexist rom version 5b8dcfa
+I (583) main_task: Started on CPU0
+I (585) main_task: Calling app_main()
+I (589) app: MiniLoRa v2.6.0 boot (reset reason: 8)
+I (594) app: cycle start (wake=4 motion=0 recovery=0)
+I (606) store: no config yet — defaults
+I (606) app: cfg: src=defaults? range=4 gnss=1 lora=1 ble=1 wifi=0 asset=0
+I (1812) app: bat 4223 mV (low=0 critical=0) reset=DEEPSLEEP
+I (1812) app: GPS skipped (indoor backoff, 6 consecutive fails)
+I (1812) app: gps decision: run=0 budget=15 consecFails=6 boot=42 batLow=0
+<<READ ERROR 11:31:02>>

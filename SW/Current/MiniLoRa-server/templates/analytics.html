@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Analytics {{ device_id }} — MiniLoRa-server{% endblock %}
+{% block content %}
+<div class="top-row">
+  <h1>Analytics — {{ device_id }}</h1>
+</div>
+{% set active = "Analytics" %}
+{% include "_device_tabs.html" %}
+
+<h2>Range
+  <select id="days">
+    <option value="7">last 7 days</option>
+    <option value="30" selected>last 30 days</option>
+    <option value="90">last 90 days</option>
+    <option value="365">last 365 days</option>
+    <option value="36500">all time</option>
+  </select>
+</h2>
+
+<div class="cards" id="summary"></div>
+
+<div class="charts">
+  <div class="chart-box"><canvas id="c_temp"></canvas></div>
+  <div class="chart-box"><canvas id="c_bat"></canvas></div>
+  <div class="chart-box"><canvas id="c_press"></canvas></div>
+  <div class="chart-box"><canvas id="c_daily"></canvas></div>
+</div>
+
+<h2>Download</h2>
+<div class="panel" style="display:flex; gap:12px; flex-wrap:wrap">
+  <a class="back" href="/api/export/{{ device_id }}.csv">⬇ readings CSV</a>
+  <a class="back" href="/api/export/{{ device_id }}.json">⬇ readings JSON</a>
+  <a class="back" href="/api/export/{{ device_id }}/diagnostics.csv">⬇ diagnostics CSV</a>
+  <a class="back" href="/api/export/db">⬇ whole database (SQLite)</a>
+</div>
+<p class="empty">CSV columns follow the readings table 1:1 (epoch
+<code>seen_at</code> + ISO <code>iso</code> column added). The JSON export
+is the same rows for scripting. The database backup is a consistent
+snapshot of everything (readings, diagnostics, devices, firmware).</p>
+
+<script>
+const DEV = {{ device_id | tojson }};
+const charts = {};
+function draw(id, cfg) {
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), cfg);
+}
+const iso = s => new Date(s * 1000).toISOString().replace('T', ' ').slice(0, 16);
+const fmtDate = d => d; // 'YYYY-MM-DD' already
+
+async function load() {
+  const days = document.getElementById('days').value;
+  const r = await fetch(`/api/analytics/${encodeURIComponent(DEV)}?days=${days}`);
+  const data = await r.json();
+  const s = data.summary, daily = data.daily;
+
+  const cards = [
+    ['Readings', s.n ?? '—', ''],
+    ['Span', s.span_days ? s.span_days.toFixed(1) : '—', 'days'],
+    ['Temp avg', s.t_avg != null ? s.t_avg : '—', '°C (min ' + (s.t_min ?? '?') + ' / max ' + (s.t_max ?? '?') + ')'],
+    ['Humidity avg', s.h_avg != null ? s.h_avg : '—', '%'],
+    ['Pressure avg', s.p_avg != null ? s.p_avg : '—', 'hPa'],
+    ['Battery now', s.b_last ?? '—', 'mV (min ' + (s.b_min ?? '?') + ')'],
+    ['Battery slope', s.bat_slope_mv_day != null ? s.bat_slope_mv_day : '—', 'mV/day (+ = drain)'],
+    ['GPS fixes', s.gps_n ?? '—', ''],
+    ['Distance', s.distance_m != null ? (s.distance_m / 1000).toFixed(2) : '—', 'km (track sum)'],
+    ['Radio-on time', s.awake_total_s != null ? Math.round(s.awake_total_s / 60) : '—', 'min total awake'],
+  ];
+  document.getElementById('summary').innerHTML = cards.map(([v, k, unit]) =>
+    `<div class="card"><div class="v">${v}<span>${unit}</span></div><div class="k">${k}</div></div>`).join('');
+
+  const labels = [...daily].reverse().map(d => d.day);
+
+  draw('c_temp', { type: 'line',
+    data: { labels, datasets: [
+      { label: 'temp min', data: [...daily].reverse().map(d => d.t_min), borderColor: '#6cf', borderWidth: 1, pointRadius: 0 },
+      { label: 'temp avg', data: [...daily].reverse().map(d => d.t_avg), borderColor: '#e6ebf0', tension: 0.2, pointRadius: 0 },
+      { label: 'temp max', data: [...daily].reverse().map(d => d.t_max), borderColor: '#f96', borderWidth: 1, pointRadius: 0 },
+    ]}, options: { maintainAspectRatio: false, plugins: { title: { display: true, text: 'Temperature °C/day' } } } });
+
+  draw('c_bat', { type: 'line',
+    data: { labels, datasets: [
+      { label: 'bat min', data: [...daily].reverse().map(d => d.b_min), borderColor: '#6cf', borderWidth: 1, pointRadius: 0 },
+      { label: 'bat avg', data: [...daily].reverse().map(d => d.b_avg), borderColor: '#9c6', tension: 0.2, pointRadius: 0 },
+      { label: 'bat max', data: [...daily].reverse().map(d => d.b_max), borderColor: '#f96', borderWidth: 1, pointRadius: 0 },
+    ]}, options: { maintainAspectRatio: false, plugins: { title: { display: true, text: 'Battery mV/day' } } } });
+
+  draw('c_press', { type: 'line',
+    data: { labels, datasets: [
+      { label: 'pressure avg', data: [...daily].reverse().map(d => d.p_avg), borderColor: '#fc6', tension: 0.2, pointRadius: 0 },
+    ]}, options: { maintainAspectRatio: false, plugins: { title: { display: true, text: 'Pressure hPa/day' } } } });
+
+  draw('c_daily', { type: 'bar',
+    data: { labels, datasets: [
+      { label: 'readings/day', data: [...daily].reverse().map(d => d.n), backgroundColor: '#458' },
+      { label: 'gps fixes/day', data: [...daily].reverse().map(d => d.gps_n), backgroundColor: '#696' },
+    ]}, options: { maintainAspectRatio: false, plugins: { title: { display: true, text: 'Coverage/day' } } } });
+}
+document.getElementById('days').addEventListener('change', load);
+load();
+</script>
+{% endblock %}

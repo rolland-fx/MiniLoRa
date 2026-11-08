@@ -1,0 +1,50 @@
+# ---- Android / Gradle ----
+**/build/
+**/.gradle/
+**/.kotlin/
+**/.idea/
+**/local.properties
+**/*.apk
+**/*.aab
+**/captures/
+**/.cxx/
+
+# ---- C/C++ / ESP-IDF (future v2 firmware) ----
+**/sdkconfig.old
+**/build/
+**/managed_components/
+**/dependencies.lock
+
+# ---- OS / editors ----
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# ---- KiCad auto-backups ----
+HW/**/MiniLora-backups/
+sdkconfig
+
+# kicad / editor junk (current HW workspace)
+HW/.history/
+HW/MiniLora-backups/
+HW/fp-info-cache
+HW/*.kicad_prl
+HW/*-bak
+HW/~*
+HW/#auto_saved_files#/
+HW/Gerber.zip
+archive/hw-old-beta5-kicad/#auto_saved_files#/
+archive/hw-old-beta5-kicad/fp-info-cache
+archive/hw-old-beta5-kicad/*.kicad_prl
+archive/hw-old-beta5-kicad/*-bak
+archive/hw-old-beta5-kicad/~*
+SW/Current/Firmware/host_tests/build_test/
+
+# ---- secrets / machine-specific (never publish) ----
+**/__pycache__/
+**/minilora-app-settings.json
+**/*.sqlite3
+**/*.sqlite3-wal
+**/*.sqlite3-shm
+SW/Current/MiniLoRa-server/data/

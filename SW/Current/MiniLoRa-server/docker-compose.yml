@@ -1,0 +1,32 @@
+services:
+  minilora-server:
+    build: .
+    container_name: minilora-server
+    restart: unless-stopped
+    # Run as the host user so ./data stays user-owned (no root files).
+    # Match your UID: `id -u` — delete/comment if the volume is root-owned.
+    user: "1000:1000"
+    # 256 MB is generous (idle ~30 MB, peaks = radio TX + CSV exports)
+    mem_limit: 256m
+    # The UI renders host-local times from this — match the LAN's timezone.
+    # Console (docker logs) is capped here; the app's own rotating file
+    # (/data/minilora.log) is capped separately.
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data:z
+      # Edit config.toml (copy from config.example.toml); restart to apply.
+      # The :z relabels the file for SELinux hosts (Fedora/RHEL) — harmless
+      # elsewhere. The container always serves on 8080 regardless of the
+      # config's [server] port.
+      - ./config.toml:/config/config.toml:ro,z
+    environment:
+      MINILORA_CONFIG: /config/config.toml
+      MINILORA_DB: /data/minilora.sqlite3
+      MINILORA_LOG_FILE: /data/minilora.log
+      TZ: Europe/Paris

@@ -1,0 +1,59 @@
+# MiniLoRa v2 — sdkconfig defaults (ESP32-C6, 4 MB flash)
+
+CONFIG_IDF_TARGET="esp32c6"
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# Custom OTA partition table (partitions.csv)
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
+
+# ---- Watchdog policy (Roadmap §4) ----
+# Task WDT on by default; timeout must exceed the longest legitimate blocking
+# operation (GPS fix window ~150 s), feeding happens at state-machine phase
+# boundaries and inside bounded loops.
+CONFIG_ESP_TASK_WDT_INIT=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=180
+# Brownout detector stays enabled (default).
+
+# ---- OTA / rollback ----
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+CONFIG_BOOTLOADER_APP_ANTI_ROLLBACK=n
+
+# ---- C++ ----
+CONFIG_COMPILER_CXX_EXCEPTIONS=y
+CONFIG_COMPILER_CXX_RTTI=y
+
+# ---- Power / sleep ----
+CONFIG_ESP_SLEEP_GPIO_RESET_WORKAROUND=y
+CONFIG_FREERTOS_HZ=1000
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_160=y
+
+# ---- Logging ----
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+CONFIG_LOG_MAXIMUM_LEVEL_DEBUG=y
+
+# ---- Misc ----
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y
+
+# ---- BLE (NimBLE) ----
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
+CONFIG_BT_NIMBLE_ROLE_CENTRAL=n
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=y
+CONFIG_BT_NIMBLE_ROLE_BROADCASTER=y
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=n
+CONFIG_BT_NIMBLE_EXT_ADV=y
+
+# ---- WiFi ----
+CONFIG_ESP_WIFI_ENABLED=y
+CONFIG_ESP_WIFI_NVS_ENABLED=y
+
+# ---- Zigbee (sleepy end device; coexists with BLE/WiFi via esp_coex) ----
+CONFIG_ZB_ENABLED=y
+CONFIG_ZB_ZED=y
+CONFIG_ZB_ZCZR=n
+
+

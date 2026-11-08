@@ -1,0 +1,10 @@
+{# Device sub-navigation — include with `device_id` and `active` in context. #}
+{% set _tabs = [("", "Overview"), ("charts", "Charts"), ("remote", "Remote"),
+                ("data", "Data"), ("diagnostics", "Diagnostics"),
+                ("analytics", "Analytics")] %}
+<div class="subnav">
+  {% for path, label in _tabs %}
+  <a class="subnav-item{{ ' active' if active == label }}"
+     href="/device/{{ device_id }}{% if path %}/{{ path }}{% endif %}">{{ label }}</a>
+  {% endfor %}
+</div>

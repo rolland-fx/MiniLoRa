@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}OTA — MiniLoRa-server{% endblock %}
+{% block content %}
+<h1>OTA firmware
+  <a class="back" href="/">← all devices</a>
+</h1>
+
+<div class="cards">
+  <div class="card"><div class="v">{{ firmware|selectattr('active')|list|length }}<span>active</span></div><div class="k">Images</div></div>
+  <div class="card"><div class="v">{{ firmware|length }}<span>total</span></div><div class="k">Uploaded</div></div>
+</div>
+
+<h2>Upload</h2>
+<form id="upload" class="panel">
+  <input type="file" name="file" accept=".bin" required>
+  <input type="text" name="version" placeholder="version (e.g. 2.5.0)" pattern="[0-9A-Za-z._-]{1,16}" required>
+  <input type="text" name="device_id"
+         title="The device pulls as its EUI (70B3D57ED0074E00). Leave empty to allow any device."
+         placeholder="target device_id (empty = any; device pulls as its EUI)">
+  <button type="submit">Upload</button>
+  <span id="upmsg"></span>
+</form>
+
+<h2>Images</h2>
+{% if firmware %}
+<table>
+  <tr><th>ID</th><th>Version</th><th>Target</th><th>Size</th><th>SHA-256</th><th>Uploaded</th><th>State</th><th></th></tr>
+  {% for f in firmware %}
+  <tr class="{{ 'warn' if f.active else '' }}">
+    <td>{{ f.id }}</td><td>{{ f.version }}</td>
+    <td>{{ f.device_id or 'ANY' }}</td>
+    <td>{{ '%.1f'|format(f.size / 1024) }} kiB</td>
+    <td title="{{ f.sha256 }}">{{ f.sha256[:12] }}…</td>
+    <td>{{ f.uploaded_h }}</td>
+    <td>{{ 'ACTIVE' if f.active else 'inactive' }}</td>
+    <td class="actions">
+      {% if not f.active %}
+      <button onclick="act({{ f.id }}, 'activate')">Activate</button>
+      {% endif %}
+      <button onclick="act({{ f.id }}, '')">Delete</button>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="empty">No images uploaded yet. Build with
+<code>idf.py build</code> and upload <code>build/minilora.bin</code> above.
+The device pulls on its next wake after you Activate + Notify (or on its
+periodic check, every <code>MINILORA_OTA_CHECK_EVERY</code> boots).</p>
+{% endif %}
+
+<h2>Notify a device (TTN downlink 0x05)</h2>
+{% if ttn_ready %}
+<form id="notify" class="panel">
+  <select name="device_id">
+    {% for d in devices %}<option value="{{ d.device_id }}">{{ d.device_id }}</option>{% endfor %}
+  </select>
+  <button type="submit">Send OTA_UPDATE</button>
+  <span id="nfmsg"></span>
+</form>
+{% else %}
+<p class="empty">TTN not configured in config.toml — trigger the update from
+the Android app (Remote tab) instead: the device pulls at its next wake.</p>
+{% endif %}
+
+<script>
+function act(id, what) {
+  if (!what) { if (!confirm('Delete image ' + id + '?')) return; }
+  const url = what ? `/api/ota/${what}/${id}` : `/api/ota/${id}`;
+  const opt = what ? {method: 'POST'} : {method: 'DELETE'};
+  fetch(url, opt).then(r => { if (r.ok) location.reload();
+                              else r.text().then(t => alert(t)); });
+}
+document.getElementById('upload').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const fd = new FormData(ev.target);
+  const msg = document.getElementById('upmsg');
+  msg.textContent = 'uploading…';
+  const r = await fetch('/api/ota/upload', {method: 'POST', body: fd});
+  const j = await r.json().catch(() => ({}));
+  if (r.ok) { location.reload(); }
+  else { msg.textContent = 'failed: ' + (j.detail || r.status); }
+};
+{% if ttn_ready %}
+document.getElementById('notify').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const dev = ev.target.device_id.value;
+  const msg = document.getElementById('nfmsg');
+  msg.textContent = 'sending…';
+  const r = await fetch(`/api/ota/notify/${dev}`, {method: 'POST'});
+  msg.textContent = r.ok ? `queued for ${dev}` : 'failed: ' + r.status;
+};
+{% endif %}
+</script>
+{% endblock %}

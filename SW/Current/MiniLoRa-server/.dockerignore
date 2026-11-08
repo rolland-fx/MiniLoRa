@@ -1,0 +1,14 @@
+# secrets and local state never enter the image (config.toml is mounted)
+config.toml
+data/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+.venv/
+.pytest_cache/
+**/__pycache__/
+tests/
+*.md
+Dockerfile
+docker-compose.yml
+.dockerignore

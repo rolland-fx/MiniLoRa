@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Config builder — MiniLoRa-server{% endblock %}
+{% block content %}
+<h1>Device config builder
+  <a class="back" href="/">← all devices</a>
+</h1>
+
+<p>Builds the device's native <code>.cfg</code> file (the 168-byte
+CRC-protected ICD §4 envelope). Import it in the Android app
+(<b>Config → Import .cfg</b>), review the values, then
+<b>Write to device</b> over BLE. The file contains the TTN keys and the
+WiFi password in clear text — treat it like a credential.</p>
+
+{% if error %}<p class="empty">⚠ {{ error }}</p>{% endif %}
+
+<form method="post" action="/config-builder/build" class="panel">
+  <h2>Identity</h2>
+  <input type="text" name="name" placeholder="Device name (max 32)"
+         maxlength="32" value="{{ form.get('name', 'MiniLoRa-FX-1') }}" required>
+  <input type="text" name="joinEUI" placeholder="JoinEUI (hex, optional)"
+         value="{{ form.get('joinEUI', '') }}">
+  <input type="text" name="devEUI" placeholder="DevEUI (hex, e.g. 70B3D57ED0074E00)"
+         value="{{ form.get('devEUI', '') }}">
+  <input type="text" name="appKey" placeholder="AppKey (32 hex chars)"
+         value="{{ form.get('appKey', '') }}">
+  <input type="text" name="nwkKey" placeholder="NwkKey (32 hex chars)"
+         value="{{ form.get('nwkKey', '') }}">
+
+  <h2>WiFi push</h2>
+  <input type="text" name="ssid" placeholder="WiFi SSID" maxlength="32"
+         value="{{ form.get('ssid', '') }}">
+  <input type="password" name="password" placeholder="WiFi password" maxlength="32"
+         value="{{ form.get('password', '') }}">
+  <input type="text" name="ip" placeholder="Server IP (e.g. 192.168.1.10)"
+         value="{{ form.get('ip', '') }}">
+  <input type="number" name="port" placeholder="Port" min="1" max="65535"
+         value="{{ form.get('port', '5000') }}">
+
+  <h2>Transports &amp; sensors</h2>
+  {% set flags = [
+    ('cfgLoRaWAN', 'LoRaWAN', true),
+    ('cfgWiFi',    'WiFi push', false),
+    ('cfgGNSS',    'GNSS', true),
+    ('cfgBME280',  'BME280', true),
+    ('cfgOPT30',   'OPT3001', true),
+    ('cfgLIS3DH',  'LIS3DH', true),
+    ('cfgBLE',     'BLE beacon', true),
+    ('cfgZigbee',  'Zigbee', false),
+  ] %}
+  {% for key, label, dflt in flags %}
+  <label class="chk">
+    <input type="checkbox" name="{{ key }}"
+           {% if (form.get(key) if form else dflt) in (true, 'on', 'true', '1') %}checked{% endif %}>
+    {{ label }}
+  </label>
+  {% endfor %}
+
+  <h2>Behavior</h2>
+  <label>Sleep duration
+    <select name="range">
+      {% set mins = [1, 2, 5, 10, 15, 20, 30, 60, 120] %}
+      {% for m in mins %}
+      <option value="{{ loop.index0 }}"
+              {% if form.get('range', '2')|int == loop.index0 %}selected{% endif %}>
+        {{ m }} min</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <h2>Asset mode (optional)</h2>
+  <label class="chk">
+    <input type="checkbox" name="cfgAssetMode"
+           {% if form.get('cfgAssetMode') in ('on', 'true', '1') %}checked{% endif %}>
+    Wake on motion (LIS3DH INT1)
+  </label>
+  <input type="number" name="motionSens" min="0" max="3" placeholder="Motion sensitivity 0-3"
+         value="{{ form.get('motionSens', '2') }}">
+  <input type="number" name="assetHeartbeatH" min="0" max="255" placeholder="Heartbeat hours (0 = 24)"
+         value="{{ form.get('assetHeartbeatH', '24') }}">
+  <input type="number" name="burstIntervalMin" min="0" max="255" placeholder="Burst sleep minutes (0 = 5)"
+         value="{{ form.get('burstIntervalMin', '5') }}">
+  <input type="number" name="burstMaxPerDay" min="0" max="255" placeholder="Bursts per day (0 = 20)"
+         value="{{ form.get('burstMaxPerDay', '20') }}">
+
+  <button type="submit">Download .cfg</button>
+</form>
+{% endblock %}

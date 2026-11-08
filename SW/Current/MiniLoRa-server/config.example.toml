@@ -1,0 +1,65 @@
+# MiniLoRa-server configuration
+# Copy to config.toml next to the code (or mount at /config/config.toml in
+# Docker). Every key is optional; missing sections use defaults.
+
+[server]
+host = "0.0.0.0"
+port = 8080
+db_path = "data/minilora.sqlite3"
+# Shared secret required on write endpoints (push + webhook). Empty = open.
+push_token = ""
+# Size-capped log file (rotation keeps it bounded forever). Empty = stderr
+# only. In Docker set MINILORA_LOG_FILE=/data/minilora.log (lands on the
+# mounted volume, survives rebuilds).
+# log_file = "minilora-server.log"
+# log_max_mb = 5          # per file
+# log_backups = 3         # rotated copies kept (total ≈ 20 MB)
+
+# Data retention — keeps the SQLite file bounded for set-and-forget LAN use.
+# Measured cost: ~200 B per reading (indexes + diag share included), so
+# 10,000 records ≈ 2 MB and the 100 MB ceiling ≈ ~500,000 readings —
+# years of multi-tracker data at the 15-min cycle.
+# [retention]
+# enabled = true
+# readings_per_device = 200_000     # newest-N kept per device (~40 MB)
+# diagnostics_per_device = 50_000
+# db_max_mb = 100                   # hard ceiling, oldest-first trim
+# check_interval_s = 3600           # enforcement pass every hour
+
+
+[wifi]
+# Label used for pushes that don't carry ?device=NAME
+default_device = "wifi-device"
+
+[ttn]
+# Webhook: create a TTN webhook (HTTP POST, JSON) pointing to
+#   https://your-server/api/ttn/webhook?token=<same as push_token>
+enabled = false
+webhook_token = ""
+
+# Home Assistant bridge: publishes MQTT discovery + state so every device
+# appears as a HA entity group (tracker + sensors). Needs an MQTT broker
+# (e.g. the Mosquitto add-on on your HA instance).
+[ha]
+enabled = false
+broker = ""            # host running Mosquitto (often the HA box)
+port = 1883
+username = ""          # broker user (empty = anonymous)
+password = ""
+topic_prefix = "minilora"
+discovery_prefix = "homeassistant"
+
+# Poller: pulls the storage API like the phone app does. Enable this OR the
+# webhook (the webhook is real-time; the poller is simpler, no public URL).
+# region = "eu1"           # eu1 | nam1 | ap1 | ...
+# app_id = "my-app"
+# api_key = "NNSXS...."
+# device_ids = ["my-tracker"]
+# poll_interval_s = 300
+# poll_limit = 20
+# poll_window_h = 24
+
+# Optional dashboard grouping: a tracker reporting under several identities
+# (WiFi push name + TTN device id) shows as ONE row with transport chips.
+# [device_groups]
+# MiniLoRa = ["MiniLoRa-FX-1", "miniloraplus-1"]

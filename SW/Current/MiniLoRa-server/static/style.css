@@ -1,0 +1,119 @@
+:root {
+  --bg: #10141a; --panel: #1a2029; --panel2: #222b37; --text: #e6ebf0;
+  --muted: #8b98a5; --accent: #00897b; --accent2: #80cbc4;
+  --warn: #ffb300; --bad: #e53935; --border: #2c3644;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+       font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+nav { display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 24px; background: var(--panel); border-bottom: 1px solid var(--border); }
+.brand { font-size: 20px; font-weight: 700; color: var(--text); text-decoration: none; }
+.brand span { color: var(--accent2); font-weight: 400; }
+.stats-chip { color: var(--muted); font-size: 13px; }
+main { max-width: 1100px; margin: 0 auto; padding: 16px 24px 48px; }
+h1 { font-size: 22px; } h2 { font-size: 16px; color: var(--muted); margin-top: 28px; }
+a { color: var(--accent2); }
+.back { font-size: 13px; margin-left: 12px; }
+.empty { color: var(--muted); background: var(--panel); padding: 16px;
+         border-radius: 8px; border: 1px dashed var(--border); }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+         gap: 10px; margin: 12px 0 4px; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+        padding: 10px 14px; text-align: center; }
+.card .v { font-size: 24px; font-weight: 600; }
+.card .v span { font-size: 12px; color: var(--muted); margin-left: 4px; }
+.card .k { font-size: 11px; color: var(--muted); text-transform: uppercase;
+           letter-spacing: .06em; }
+
+#map { height: 340px; border-radius: 10px; border: 1px solid var(--border);
+       margin: 14px 0; }
+.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.chart-box { background: var(--panel); border: 1px solid var(--border);
+             border-radius: 10px; padding: 12px; height: 220px; }
+@media (max-width: 760px) { .charts { grid-template-columns: 1fr; } }
+
+table { width: 100%; border-collapse: collapse; background: var(--panel);
+        border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+        font-size: 13px; margin-top: 8px; }
+th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+th { background: var(--panel2); color: var(--muted); font-weight: 600; }
+tr.warn td { background: #33280a; }
+tr:hover td { background: var(--panel2); }
+
+.api { color: var(--muted); font-size: 13px; }
+.api code { background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: var(--accent2); }
+
+/* config builder */
+.panel { display: flex; flex-direction: column; gap: 8px; }
+.panel input[type="text"], .panel input[type="password"],
+.panel input[type="number"], .panel select {
+  background: var(--panel2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); padding: 8px 10px; font-size: 14px;
+}
+.panel .chk { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.panel button { align-self: flex-start; }
+
+/* buttons (global) */
+button { background: var(--panel2); color: var(--text);
+         border: 1px solid var(--border); border-radius: 6px;
+         padding: 6px 14px; font-size: 14px; cursor: pointer; }
+button:hover { border-color: var(--accent2); }
+button.danger { background: transparent; color: var(--bad);
+                border-color: var(--bad); }
+button.danger:hover { background: var(--bad); color: #fff; }
+.muted { color: var(--muted); font-size: 14px; }
+
+/* collapsible field guide (diagnostics page) */
+details.field-guide { margin-top: 16px; }
+details.field-guide summary { cursor: pointer; color: var(--muted);
+                              font-size: 14px; user-select: none; }
+details.field-guide summary:hover { color: var(--accent2); }
+details.field-guide[open] summary { margin-bottom: 8px; }
+details.field-guide table { margin-top: 8px; }
+details.field-guide td:first-child { font-weight: 600; white-space: nowrap;
+                                     vertical-align: top; }
+
+/* remote config toggles (device page) — a compact table without the
+   full-width data-table chrome */
+table.cfgtbl { width: auto; background: none; border: none; font-size: 14px;
+               margin-top: 0; }
+table.cfgtbl th { display: none; }
+table.cfgtbl td { padding: 3px 16px 3px 0; border-bottom: 1px dotted var(--border); }
+table.cfgtbl tr:hover td { background: none; }
+table.cfgtbl td:first-child { font-weight: 600; }
+.cfgbtns button { padding: 2px 14px; font-size: 13px; }
+
+/* graph window selector (charts page) */
+.rangebar { display: flex; align-items: center; gap: 6px;
+            margin: 0 0 12px; flex-wrap: wrap; }
+.rangebar button { padding: 2px 12px; font-size: 13px; }
+.rangebar button.active { background: var(--panel2); color: var(--accent2);
+                          border-color: var(--accent2); }
+.st-on { color: #66bb6a; font-weight: 600; }
+.st-off { color: var(--muted); }
+
+/* ---- UX rework: nav, device sub-tabs, transport chips ---- */
+nav .nav-links { margin-left: auto; display: flex; gap: 14px; }
+nav .nav-links a { color: var(--text); text-decoration: none;
+                   padding: 4px 8px; border-radius: 6px; font-size: 14px; }
+nav .nav-links a:hover { background: var(--panel2); color: var(--accent2); }
+
+.subnav { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 14px; }
+.subnav-item { color: var(--muted); text-decoration: none; font-size: 14px;
+               padding: 5px 12px; border-radius: 8px;
+               border: 1px solid transparent; }
+.subnav-item:hover { background: var(--panel2); color: var(--text); }
+.subnav-item.active { background: var(--panel2); color: var(--accent2);
+                      border-color: var(--border); font-weight: 600; }
+
+.chip { display: inline-block; background: var(--panel2); color: var(--text);
+        border: 1px solid var(--border); border-radius: 8px;
+        padding: 2px 8px; margin: 1px 4px 1px 0; font-size: 12px;
+        text-decoration: none; }
+.chip:hover { border-color: var(--accent2); }
+.chip .muted { font-size: 11px; }
+
+/* status token for unknown state (on/off live with .cfgtbl above) */
+.st-unknown { color: var(--muted); font-style: italic; }

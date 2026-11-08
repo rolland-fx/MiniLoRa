@@ -1,0 +1,245 @@
+{
+  "format": "icd_v3",
+  "diag_schema": 5,
+  "diag_length": 29,
+  "diag_frames": [
+    {
+      "name": "diag_healthy",
+      "description": "Healthy device: fw 2.5.0, 1234 boots, no failures, GPS valid, OTA confirmed, TTFF 9 s, heard by 3 gateways at 12 dB margin. WiFi+BLE+GNSS on.",
+      "hex": "05 02 05 00 D2 04 00 00 05 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 09 0C 03 00 0D",
+      "expected": {
+        "fw": [
+          2,
+          5,
+          0
+        ],
+        "bootCount": 1234,
+        "unexpectedResets": 0,
+        "lastResetReason": 5,
+        "gpsTimeouts": 0,
+        "loraJoinFailures": 0,
+        "loraSendFailures": 0,
+        "wifiFailures": 0,
+        "zigbeeFailures": 0,
+        "sensorReadFailures": 0,
+        "gpsConsecFails": 0,
+        "powerFlags": 0,
+        "flags2": 1,
+        "lastTtff": 9,
+        "linkMargin": 12,
+        "gwCnt": 3,
+        "otaStatus": 0,
+        "configFlags": 13,
+        "schema": 5
+      }
+    },
+    {
+      "name": "diag_struggling",
+      "description": "Indoor tracker: GPS never fixes (consec=3), some join failures, low battery degraded flag, recovery mode latched, no GPS this cycle, no fix since boot (TTFF 255), OTA download failed. GNSS+BME280 on, Zigbee off.",
+      "hex": "05 02 05 00 FF FF 03 00 01 FF FF 07 00 08 00 09 00 0A 00 0B 00 03 01 04 FF FF FF 03 18",
+      "expected": {
+        "fw": [
+          2,
+          5,
+          0
+        ],
+        "bootCount": 65535,
+        "unexpectedResets": 3,
+        "lastResetReason": 1,
+        "gpsTimeouts": 65535,
+        "loraJoinFailures": 7,
+        "loraSendFailures": 8,
+        "wifiFailures": 9,
+        "zigbeeFailures": 10,
+        "sensorReadFailures": 11,
+        "gpsConsecFails": 3,
+        "powerFlags": 1,
+        "flags2": 4,
+        "lastTtff": 255,
+        "linkMargin": 255,
+        "gwCnt": 255,
+        "otaStatus": 3,
+        "configFlags": 24,
+        "schema": 5
+      }
+    }
+  ],
+  "config_envelope": [
+    {
+      "name": "config_write_v3_valid",
+      "description": "Schema-3 envelope; body is a placeholder sequence (real body is the 159-byte DeviceConfig).",
+      "hex": "43 03 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F 10 11 12 13 14 15 16 17 18 19 1A 1B 1C 1D 1E 1F 20 21 22 23 24 25 26 27 28 29 2A 2B 2C 2D 2E 2F 30 31 32 33 34 35 36 37 38 39 3A 3B 3C 3D 3E 3F 40 41 42 43 44 45 46 47 48 49 4A 4B 4C 4D 4E 4F 50 51 52 53 54 55 56 57 58 59 5A 5B 5C 5D 5E 5F 60 61 62 63 64 65 66 67 68 69 6A 6B 6C 6D 6E 6F 70 71 72 73 74 75 76 77 78 79 7A 7B 7C 7D 7E 7F 80 81 82 83 84 85 86 87 88 89 8A 8B 8C 8D 8E 8F 90 91 92 93 94 95 96 97 98 99 9A 9B 9C 9D 9E 3A 5A",
+      "crc16": 23098
+    },
+    {
+      "name": "config_write_v3_bad_crc",
+      "description": "Same envelope with corrupted CRC \u2014 firmware must reject (BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN).",
+      "hex": "43 03 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F 10 11 12 13 14 15 16 17 18 19 1A 1B 1C 1D 1E 1F 20 21 22 23 24 25 26 27 28 29 2A 2B 2C 2D 2E 2F 30 31 32 33 34 35 36 37 38 39 3A 3B 3C 3D 3E 3F 40 41 42 43 44 45 46 47 48 49 4A 4B 4C 4D 4E 4F 50 51 52 53 54 55 56 57 58 59 5A 5B 5C 5D 5E 5F 60 61 62 63 64 65 66 67 68 69 6A 6B 6C 6D 6E 6F 70 71 72 73 74 75 76 77 78 79 7A 7B 7C 7D 7E 7F 80 81 82 83 84 85 86 87 88 89 8A 8B 8C 8D 8E 8F 90 91 92 93 94 95 96 97 98 99 9A 9B 9C 9D 9E C5 A5"
+    }
+  ],
+  "downlink_commands": [
+    {
+      "name": "locate_now",
+      "opcode": 1,
+      "hex": "4D 01 00"
+    },
+    {
+      "name": "send_diag",
+      "opcode": 2,
+      "hex": "4D 02 00"
+    },
+    {
+      "name": "reset_diag",
+      "opcode": 3,
+      "hex": "4D 03 00"
+    },
+    {
+      "name": "ble_window",
+      "opcode": 4,
+      "hex": "4D 04 00"
+    },
+    {
+      "name": "ota_update",
+      "opcode": 5,
+      "hex": "4D 05 00"
+    },
+    {
+      "name": "cfg_set_wifi_on",
+      "opcode": 6,
+      "arg": 129,
+      "hex": "4D 06 81"
+    },
+    {
+      "name": "cfg_set_wifi_off",
+      "opcode": 6,
+      "arg": 1,
+      "hex": "4D 06 01"
+    },
+    {
+      "name": "cfg_set_zigbee_on",
+      "opcode": 6,
+      "arg": 130,
+      "hex": "4D 06 82"
+    },
+    {
+      "name": "cfg_set_zigbee_off",
+      "opcode": 6,
+      "arg": 2,
+      "hex": "4D 06 02"
+    },
+    {
+      "name": "cfg_set_ble_on",
+      "opcode": 6,
+      "arg": 131,
+      "hex": "4D 06 83"
+    },
+    {
+      "name": "cfg_set_ble_off",
+      "opcode": 6,
+      "arg": 3,
+      "hex": "4D 06 03"
+    },
+    {
+      "name": "cfg_set_gnss_on",
+      "opcode": 6,
+      "arg": 132,
+      "hex": "4D 06 84"
+    },
+    {
+      "name": "cfg_set_gnss_off",
+      "opcode": 6,
+      "arg": 4,
+      "hex": "4D 06 04"
+    },
+    {
+      "name": "cfg_set_bme280_on",
+      "opcode": 6,
+      "arg": 133,
+      "hex": "4D 06 85"
+    },
+    {
+      "name": "cfg_set_bme280_off",
+      "opcode": 6,
+      "arg": 5,
+      "hex": "4D 06 05"
+    },
+    {
+      "name": "cfg_set_opt3001_on",
+      "opcode": 6,
+      "arg": 134,
+      "hex": "4D 06 86"
+    },
+    {
+      "name": "cfg_set_opt3001_off",
+      "opcode": 6,
+      "arg": 6,
+      "hex": "4D 06 06"
+    },
+    {
+      "name": "cfg_set_lis3dh_on",
+      "opcode": 6,
+      "arg": 135,
+      "hex": "4D 06 87"
+    },
+    {
+      "name": "cfg_set_lis3dh_off",
+      "opcode": 6,
+      "arg": 7,
+      "hex": "4D 06 07"
+    },
+    {
+      "name": "set_range_1min",
+      "opcode": 7,
+      "arg": 0,
+      "hex": "4D 07 00"
+    },
+    {
+      "name": "set_range_2min",
+      "opcode": 7,
+      "arg": 1,
+      "hex": "4D 07 01"
+    },
+    {
+      "name": "set_range_5min",
+      "opcode": 7,
+      "arg": 2,
+      "hex": "4D 07 02"
+    },
+    {
+      "name": "set_range_10min",
+      "opcode": 7,
+      "arg": 3,
+      "hex": "4D 07 03"
+    },
+    {
+      "name": "set_range_15min",
+      "opcode": 7,
+      "arg": 4,
+      "hex": "4D 07 04"
+    },
+    {
+      "name": "set_range_20min",
+      "opcode": 7,
+      "arg": 5,
+      "hex": "4D 07 05"
+    },
+    {
+      "name": "set_range_30min",
+      "opcode": 7,
+      "arg": 6,
+      "hex": "4D 07 06"
+    },
+    {
+      "name": "set_range_60min",
+      "opcode": 7,
+      "arg": 7,
+      "hex": "4D 07 07"
+    },
+    {
+      "name": "set_range_120min",
+      "opcode": 7,
+      "arg": 8,
+      "hex": "4D 07 08"
+    }
+  ]
+}

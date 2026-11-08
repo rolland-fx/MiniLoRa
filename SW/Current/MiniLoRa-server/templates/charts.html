@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Charts — {{ device_id }} — MiniLoRa-server{% endblock %}
+{% block content %}
+<h1>Charts — {{ device_id }}</h1>
+{% include "_device_tabs.html" with context %}
+
+<div class="rangebar" id="rangebar">
+  <span class="muted">Window</span>
+  <button data-h="1">1 h</button><button data-h="3">3 h</button><button
+    data-h="6">6 h</button><button data-h="12">12 h</button><button
+    data-h="24">24 h</button><button data-h="48">48 h</button><button
+    data-h="all" class="active">All</button>
+  <span id="rangeInfo" class="muted"></span>
+</div>
+
+<div class="charts">
+  <div class="chart-box"><canvas id="c_temp"></canvas></div>
+  <div class="chart-box"><canvas id="c_hum"></canvas></div>
+  <div class="chart-box"><canvas id="c_pres"></canvas></div>
+  <div class="chart-box"><canvas id="c_bat"></canvas></div>
+  <div class="chart-box"><canvas id="c_lux"></canvas></div>
+  <div class="chart-box"><canvas id="c_acc"></canvas></div>
+</div>
+
+<script>
+const R = {{ readings_json | safe }};
+// Window control state: CHARTS holds every rendered chart so the x scale
+// can be clamped in place (no rebuild, no round-trip) when the range
+// changes. rangeH = hours back from now, null = all.
+const CHARTS = {};
+let rangeH = null;
+
+function applyRange() {
+  const min = rangeH === null ? undefined : Date.now() - rangeH * 3600e3;
+  Object.values(CHARTS).forEach(c => {
+    c.options.scales.x.min = min;
+    c.update('none');
+  });
+  const cutoff = rangeH === null ? 0 : Date.now() / 1000 - rangeH * 3600;
+  const n = R.filter(r => r.seen_at >= cutoff).length;
+  const info = document.getElementById('rangeInfo');
+  if (info) info.textContent =
+    n === R.length ? `${n} readings` : `${n} of ${R.length} readings in view`;
+}
+
+// charts — guarded: a CDN hiccup here must not kill the rest of the page
+['c_temp:Temperature:temp_c:#e65100:°C',
+ 'c_hum:Humidity:hum_pct:#0277bd:%',
+ 'c_pres:Pressure:pressure_hpa:#6a1b9a:hPa',
+ 'c_bat:Battery:bat_mv:#2e7d32:mV',
+ 'c_lux:Light:lux:#f9a825:lux'].forEach(spec => {
+  try {
+    const [id, label, key, color, yTitle] = spec.split(':');
+    const pts = R.filter(r => r[key] !== null);
+    CHARTS[id] = new Chart(document.getElementById(id), {
+      type: 'line',
+      data: { datasets: [{
+        label, data: pts.map(r => ({x: r.seen_at * 1000, y: r[key]})),
+        borderColor: color, backgroundColor: color + '33', tension: 0.25,
+        pointRadius: 0, borderWidth: 2, fill: true,
+      }]},
+      options: {
+        scales: {
+          x: {
+            type: 'time',
+            time: {
+              tooltipFormat: 'yyyy-MM-dd HH:mm',
+              // 24 h clock on the axis ticks (date-fns tokens: HH = 0-23)
+              displayFormats: {
+                second: 'HH:mm:ss',
+                minute: 'HH:mm',
+                hour: 'HH:mm',
+                day: 'yyyy-MM-dd',
+              },
+            },
+          },
+          y: { title: { display: true, text: yTitle } },
+        },
+        plugins: { legend: { display: false } },
+        elements: { point: { radius: 0 } },
+      }
+    });
+  } catch (e) { console.error('chart failed:', spec, e); }
+});
+
+// accelerometer — X/Y/Z in one chart (g). Rows from before the mg unit fix
+// store 0 on every axis; they would draw a false flatline, so only rows
+// with any non-zero axis are plotted.
+try {
+  const A = R.filter(r => r.acc_x_mg || r.acc_y_mg || r.acc_z_mg);
+  if (A.length) {
+    const axes = [['acc_x_mg', 'X', '#e53935'],
+                  ['acc_y_mg', 'Y', '#43a047'],
+                  ['acc_z_mg', 'Z', '#1e88e5']];
+    CHARTS['c_acc'] = new Chart(document.getElementById('c_acc'), {
+      type: 'line',
+      data: { datasets: axes.map(([key, label, color]) => ({
+        label: 'Acc ' + label,
+        data: A.map(r => ({x: r.seen_at * 1000, y: r[key] / 1000})),
+        borderColor: color, backgroundColor: color + '33', tension: 0.25,
+        pointRadius: 0, borderWidth: 2,
+      })) },
+      options: {
+        scales: {
+          x: { type: 'time', time: { tooltipFormat: 'yyyy-MM-dd HH:mm',
+                displayFormats: { minute: 'HH:mm', hour: 'HH:mm',
+                                  day: 'yyyy-MM-dd' } } },
+          y: { title: { display: true, text: 'g' } },
+        },
+        plugins: { legend: { display: true } },
+        elements: { point: { radius: 0 } },
+      }
+    });
+  } else {
+    document.getElementById('c_acc').outerHTML =
+      '<p class="empty">No accelerometer data yet (firmware ≥ 2.6.14 stores it in mg).</p>';
+  }
+} catch (e) { console.error('acc chart failed:', e); }
+
+// window control wiring — last, so every chart is already registered.
+// Client-side only: the merged rows are already on the page, the x scale
+// is clamped and Chart.js re-renders (works on group pages too).
+try {
+  document.querySelectorAll('#rangebar button[data-h]').forEach(b => {
+    b.onclick = () => {
+      document.querySelectorAll('#rangebar button')
+        .forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      rangeH = b.dataset.h === 'all' ? null : parseInt(b.dataset.h, 10);
+      applyRange();
+    };
+  });
+  applyRange();  // initial "N readings" counter for the default All view
+} catch (e) { console.error('range control failed:', e); }
+</script>
+{% endblock %}

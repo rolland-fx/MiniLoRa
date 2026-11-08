@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MiniLoRa</string>
+    <string name="status_ready">Ready to scan</string>
+    <string name="status_scanning">Scanning…</string>
+    <string name="status_error">Error</string>
+    <string name="label_temperature">Temperature</string>
+    <string name="label_humidity">Humidity</string>
+    <string name="label_pressure">Pressure</string>
+    <string name="label_battery">Battery</string>
+    <string name="label_luminosity">Luminosity</string>
+    <string name="label_acceleration">Acceleration</string>
+    <string name="label_gps">GPS</string>
+    <string name="label_altitude">Altitude</string>
+    <string name="label_satellites">Satellites</string>
+    <string name="label_timestamp">Timestamp</string>
+    <string name="label_history">Scan History</string>
+    <string name="btn_clear_history">Clear</string>
+    <string name="msg_bluetooth_required">Bluetooth is required to use this app</string>
+    <string name="msg_ble_unavailable">BLE is not available on this device</string>
+    <string name="msg_permission_denied">BLE scanning permission denied</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_device_name_label">Device name filter</string>
+    <string name="settings_device_name_hint">Enter keyword to filter devices</string>
+    <string name="settings_save">Save</string>
+    <string name="settings_cancel">Cancel</string>
+    <string name="ble_start">BLE Start</string>
+    <string name="ble_stop">BLE Stop</string>
+    <string name="ttn_start">TTN Start</string>
+    <string name="ttn_stop">TTN Stop</string>
+
+    <!-- TTN integration strings -->
+    <string name="ttn_fetch">Fetch from TTN</string>
+    <string name="ttn_source_ble">Source: BLE</string>
+    <string name="ttn_source_ttn">Source: TTN</string>
+    <string name="ttn_auto_fetch">Auto-fetch</string>
+    <string name="ttn_settings_title">TTN Settings</string>
+    <string name="ttn_api_key_label">TTN API Key</string>
+    <string name="ttn_api_key_hint">Paste API key (NNSXS...)</string>
+    <string name="ttn_app_id_label">Application ID</string>
+    <string name="ttn_app_id_hint">Your TTN application name</string>
+    <string name="ttn_device_id_label">Device ID</string>
+    <string name="ttn_device_id_hint">Device ID in TTN</string>
+    <string name="ttn_poll_interval_label">Poll interval (seconds)</string>
+    <string name="ttn_poll_interval_hint">300</string>
+    <string name="ttn_region_label">TTN Region</string>
+    <string name="ttn_region_hint">eu1, us1, etc.</string>
+    <string name="ttn_fetching">Fetching TTN data…</string>
+    <string name="ttn_no_data">No TTN data yet</string>
+    <string name="ttn_configure">Configure TTN in Settings</string>
+    <string name="history_source_ble">Source: BLE</string>
+    <string name="history_source_ttn">Source: TTN</string>
+    <string name="history_source_wifi">Source: WiFi</string>
+    <string name="history_source_both">Source: TTN+BLE</string>
+    <string name="history_source_ble_wifi">Source: BLE+WiFi</string>
+    <string name="history_source_ttn_wifi">Source: TTN+WiFi</string>
+    <string name="history_source_all">Source: ALL</string>
+    <string name="history_empty">No data yet</string>
+    <string name="wifi_start">WiFi Start</string>
+    <string name="wifi_stop">WiFi Stop</string>
+
+    <!-- Device Configuration strings -->
+    <string name="device_config_title">Configure Device</string>
+    <string name="device_config_global_name">Device Name (globalName)</string>
+    <string name="device_config_global_name_hint">Device name (max 32 chars)</string>
+    <string name="device_config_global_name_helper">BLE advertising and WiFi hostname</string>
+    <string name="device_config_wifi_ssid">WiFi SSID</string>
+    <string name="device_config_wifi_password">WiFi Password</string>
+    <string name="device_config_server_ip">Server IP address</string>
+    <string name="device_config_server_port">Server TCP port</string>
+    <string name="device_config_join_eui">Join EUI (hex, 16 chars)</string>
+    <string name="device_config_dev_eui">Dev EUI (hex, 16 chars)</string>
+    <string name="device_config_app_key">App Key (hex, 32 chars)</string>
+    <string name="device_config_nwk_key">Nwk Key (hex, 32 chars)</string>
+    <string name="device_config_read">Read from Device</string>
+    <string name="device_config_write">Write to Device</string>
+    <string name="device_config_save_local">Save to Local</string>
+    <string name="device_config_cancel">Cancel</string>
+</resources>

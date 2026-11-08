@@ -1,0 +1,37 @@
+name: firmware
+
+on:
+  push:
+    branches: [main]
+    paths: ["SW/Current/Firmware/**", ".github/workflows/firmware.yml"]
+  pull_request:
+    paths: ["SW/Current/Firmware/**", ".github/workflows/firmware.yml"]
+  workflow_dispatch:
+
+jobs:
+  idf-build:
+    name: ESP-IDF build (esp32c6)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build with ESP-IDF
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.5.1
+          target: esp32c6
+          path: SW/Current/Firmware
+
+  host-tests:
+    name: Host unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        working-directory: SW/Current/Firmware/host_tests
+        run: cmake -B build
+      - name: Build
+        working-directory: SW/Current/Firmware/host_tests
+        run: cmake --build build
+      - name: Run
+        working-directory: SW/Current/Firmware/host_tests
+        run: ./build/minilora_tests

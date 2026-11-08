@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ device_id }} — MiniLoRa-server{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+{% block content %}
+<div class="top-row">
+  <h1>{{ device_id }}
+    <a class="back" href="/">← all devices</a>
+  </h1>
+  {% include "_device_tabs.html" with context %}
+  {% if latest %}
+  <div class="cards">
+    <div class="card"><div class="v">{{ latest.temp_c }}<span>°C</span></div><div class="k">Temperature</div></div>
+    <div class="card"><div class="v">{{ latest.hum_pct }}<span>%</span></div><div class="k">Humidity</div></div>
+    <div class="card"><div class="v">{{ latest.pressure_hpa }}<span>hPa</span></div><div class="k">Pressure</div></div>
+    <div class="card"><div class="v">{{ (latest.bat_mv / 1000)|round(2) }}<span>V</span></div><div class="k">Battery</div></div>
+    <div class="card"><div class="v">{{ latest.lux }}<span>lux</span></div><div class="k">Light</div></div>
+    <div class="card"><div class="v">{{ 'fix' if latest.gps_valid else 'no fix' }}<span>{{ latest.sats }} sats</span></div><div class="k">GPS</div></div>
+  </div>
+  <p class="muted">Showing the reading from <strong>{{ latest.seen_h }}</strong>{% if latest.gps_h %} · GPS fix at {{ latest.gps_h }}{% endif %} · {{ latest.source }}</p>
+  {% endif %}
+</div>
+
+<div id="map"></div>
+
+<script>
+const R = {{ readings_json | safe }};
+
+// map: latest position + trail of valid fixes
+try {
+  const fixes = R.filter(r => r.latitude !== null);
+  if (fixes.length) {
+    const last = fixes[fixes.length - 1];
+    const map = L.map('map').setView([last.latitude, last.longitude], 14);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      { attribution: '© OpenStreetMap' }).addTo(map);
+    const pts = fixes.slice(-100).map(r => [r.latitude, r.longitude]);
+    L.polyline(pts, {color: '#00897b', weight: 2, opacity: 0.6}).addTo(map);
+    pts.slice(0, -1).forEach(p => L.circleMarker(p, {radius: 3, color: '#0288d1'}).addTo(map));
+    L.circleMarker(pts[pts.length - 1], {radius: 6, color: '#e53935'}).addTo(map);
+  } else {
+    document.getElementById('map').outerHTML =
+      '<p class="empty">No GPS fixes recorded yet.</p>';
+  }
+} catch (e) { console.error('map failed:', e); }
+</script>
+{% endblock %}

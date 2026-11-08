@@ -1,0 +1,11 @@
+## IDF Component Manager manifest
+dependencies:
+  idf: ">=5.3"
+  # RadioLib ships an ESP-IDF HAL (src/hal/ESP-IDF) and a component-aware
+  # CMakeLists; the FREERTOS_HZ=1000 requirement is already in sdkconfig.defaults
+  jgromes/radiolib: "^7.8.1"
+  # Zigbee sleepy end device (ZBOSS-based); HA decodes via native clusters.
+  # esp-zboss-lib listed explicitly: the zigbee lib's transitive resolution
+  # misses it on IDF 5.5.1 (component manager quirk).
+  espressif/esp-zigbee-lib: "1.6.8"
+  espressif/esp-zboss-lib: "^1.6.2"

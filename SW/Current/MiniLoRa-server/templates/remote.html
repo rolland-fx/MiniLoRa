@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Remote — {{ device_id }} — MiniLoRa-server{% endblock %}
+{% block content %}
+<h1>Remote — {{ device_id }}</h1>
+{% include "_device_tabs.html" with context %}
+
+<p class="muted">Commands and remote config reach the device over TTN
+downlink (class A: the command rides the RX window of the device's next
+uplink and applies at the start of the cycle after that — ≈ two sleep
+intervals from now). Firmware images live on the
+<a href="/ota">OTA page</a>.</p>
+
+<h2>Commands</h2>
+<div class="panel">
+  <p>
+    <button onclick="sendCmd('locate_now', this)">Locate now</button>
+    <button onclick="sendCmd('send_diag', this)">Send diag</button>
+    <button onclick="sendCmd('reset_diag', this)">Reset counters</button>
+    <button onclick="sendCmd('ble_window', this)">Open BLE window</button>
+    <button onclick="sendCmd('ota_update', this)">Update firmware</button>
+    <span id="cmdMsg" class="muted"></span>
+  </p>
+</div>
+
+<h2>Remote config (ICD 3.5)</h2>
+<div class="panel">
+  <p class="muted">Enable/disable a transport or sensor; saved on the
+    device, confirmed on the next diag frame. LoRaWAN is always on, and
+    long-press BLE config always works. State from the latest diag{%
+    if not cfg_known %} — none received yet (pre-2.6.11 firmware reports no
+    config flags){% endif %}:</p>
+  <table class="cfgtbl">
+    {% for r in cfg_rows %}
+    <tr>
+      <td>{{ r.label }}</td>
+      <td>{% if r.on is none %}<span class="muted">unknown</span>
+          {% elif r.on %}<span class="st-on">on</span>
+          {% else %}<span class="st-off">off</span>{% endif %}</td>
+      <td class="cfgbtns">
+        <button onclick="cfgSet('{{ r.name }}', true, this)"
+                {% if r.on %}disabled{% endif %}>ON</button>
+        <button onclick="cfgSet('{{ r.name }}', false, this)"
+                {% if r.on == false %}disabled{% endif %}>OFF</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <p class="muted"><strong>Sleep duration</strong> (ICD 3.6 SET_RANGE) —
+    the interval between the device's wake cycles, saved on the device.
+    The confirm rides the next telemetry frame's sleep-minutes byte.{%
+    if latest and latest.sleep_min %} Current: {{ latest.sleep_min }} min.{%
+    endif %}</p>
+  <p>
+    <select id="sleepSel">
+      {% for m in sleep_table %}
+      <option value="{{ loop.index0 }}"
+              {% if latest and latest.sleep_min == m %}selected{% endif %}>
+        {{ m }} min</option>
+      {% endfor %}
+    </select>
+    <button onclick="setSleep(document.getElementById('sleepSel').value, this)">
+      Set sleep</button>
+  </p>
+  <p class="muted">Danger zone — cancels <em>any</em> pending downlink
+    (commands queued here, in the app, or in the TTN console).
+    <button class="danger" onclick="clearQueue(this)">Clear TTN downlink queue</button>
+    <span id="clearMsg" class="muted"></span>
+  </p>
+</div>
+
+<script>
+const DEV_ID = {{ device_id | tojson }};
+
+// remote commands (ICD §3 + 3.5 CFG_SET + 3.6 SET_RANGE) via TTN downlink
+async function queueCmd(url, btn) {
+  const msg = document.getElementById('cmdMsg');
+  btn.disabled = true;
+  msg.textContent = 'queuing…';
+  try {
+    const r = await fetch(url, { method: 'POST' });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      msg.textContent = j.detail || ('failed: HTTP ' + r.status);
+      btn.disabled = false;
+      return;
+    }
+    msg.textContent = 'queued [' + j.hex + '] to ' + j.device +
+                      ' — applies ≈2 wake cycles from now';
+  } catch (e) {
+    msg.textContent = 'failed: ' + e;
+    btn.disabled = false;
+  }
+}
+function sendCmd(name, btn) {
+  queueCmd(`/api/device/${encodeURIComponent(DEV_ID)}/command?cmd=${name}`,
+           btn);
+}
+function cfgSet(flag, on, btn) {
+  queueCmd(`/api/device/${encodeURIComponent(DEV_ID)}` +
+           `/command?cmd=config_set&flag=${flag}&on=${on}`, btn);
+}
+function setSleep(idx, btn) {
+  queueCmd(`/api/device/${encodeURIComponent(DEV_ID)}` +
+           `/command?cmd=set_range&index=${idx}`, btn);
+}
+async function clearQueue(btn) {
+  if (!confirm('Clear ALL pending downlinks for this device?\n' +
+               'Commands queued here, in the app or in the TTN console ' +
+               'are cancelled.')) return;
+  btn.disabled = true;
+  const msg = document.getElementById('clearMsg');
+  msg.textContent = 'clearing…';
+  try {
+    const r = await fetch(`/api/device/${encodeURIComponent(DEV_ID)}` +
+                          '/downlink/clear', { method: 'POST' });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      msg.textContent = j.detail || ('failed: HTTP ' + r.status);
+      btn.disabled = false;
+      return;
+    }
+    msg.textContent = 'cleared — ' + j.device + ' has an empty queue';
+  } catch (e) {
+    msg.textContent = 'failed: ' + e;
+    btn.disabled = false;
+  }
+}
+</script>
+{% endblock %}

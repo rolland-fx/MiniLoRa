@@ -1,0 +1,318 @@
+{
+  "format": "payload_v1",
+  "length": 28,
+  "vectors": [
+    {
+      "name": "doc_example",
+      "description": "The worked example from payload_format.md (hex is the contract; the decoded table below is recomputed authoritatively).",
+      "saturating": false,
+      "hex": "1A 0F BA 27 F5 2F 04 7F 7F 7F D2 C6 29 03 A4 7E 87 00 E5 03 08 6B 19 5D 6A 4B 0F 01",
+      "expected": {
+        "temp": 26,
+        "hum": 15,
+        "pres": 10170,
+        "bat_mv": 4231,
+        "lux": 1071,
+        "acc": [
+          0,
+          0,
+          0
+        ],
+        "lat": 53069522,
+        "lon": 8879780,
+        "alt": -3,
+        "sat": 8,
+        "time": 1784486251,
+        "awake": 75,
+        "sleep": 15,
+        "gpio": 1
+      },
+      "decoded": {
+        "temp": 26,
+        "hum": 15,
+        "pres": 10170,
+        "bat_mv": 4229,
+        "bat_raw": 245,
+        "lux": 1071,
+        "acc_raw": [
+          -39,
+          -39,
+          -39
+        ],
+        "acc_raw_bytes": [
+          127,
+          127,
+          127
+        ],
+        "lat": 53.069522,
+        "lon": 8.87978,
+        "alt": -3,
+        "sat": 8,
+        "time": 1784486251,
+        "awake": 75,
+        "sleep": 15,
+        "gpio": 1
+      }
+    },
+    {
+      "name": "negative_coords_night",
+      "description": "Southern/western hemisphere, cold night, negative altitude.",
+      "saturating": false,
+      "hex": "F4 58 DE 26 AA 00 00 5F A8 02 80 78 4F FD EB 32 A4 F8 8A 02 05 00 78 E7 68 2A 3C 00",
+      "expected": {
+        "temp": -12,
+        "hum": 88,
+        "pres": 9950,
+        "bat_mv": 3700,
+        "lux": 0,
+        "acc": [
+          -2500,
+          3200,
+          -9800
+        ],
+        "lat": -45123456,
+        "lon": -123456789,
+        "alt": -350,
+        "sat": 5,
+        "time": 1760000000,
+        "awake": 42,
+        "sleep": 60,
+        "gpio": 0
+      },
+      "decoded": {
+        "temp": -12,
+        "hum": 88,
+        "pres": 9950,
+        "bat_mv": 3700,
+        "bat_raw": 170,
+        "lux": 0,
+        "acc_raw": [
+          -2549,
+          3176,
+          -9843
+        ],
+        "acc_raw_bytes": [
+          95,
+          168,
+          2
+        ],
+        "lat": -45.123456,
+        "lon": -123.456789,
+        "alt": -350,
+        "sat": 5,
+        "time": 1760000000,
+        "awake": 42,
+        "sleep": 60,
+        "gpio": 0
+      }
+    },
+    {
+      "name": "no_fix",
+      "description": "GNSS enabled but no fix: lat/lon/time are zero, sat=0. v2 sets diag flags elsewhere; the frame itself is unchanged.",
+      "saturating": false,
+      "hex": "15 37 92 27 D1 FA 00 7F 7F B3 00 00 00 00 00 00 00 00 E8 03 00 00 00 00 00 96 0A 00",
+      "expected": {
+        "temp": 21,
+        "hum": 55,
+        "pres": 10130,
+        "bat_mv": 3980,
+        "lux": 250,
+        "acc": [
+          12,
+          -7,
+          4096
+        ],
+        "lat": 0,
+        "lon": 0,
+        "alt": 0,
+        "sat": 0,
+        "time": 0,
+        "awake": 150,
+        "sleep": 10,
+        "gpio": 0
+      },
+      "decoded": {
+        "temp": 21,
+        "hum": 55,
+        "pres": 10130,
+        "bat_mv": 3975,
+        "bat_raw": 209,
+        "lux": 250,
+        "acc_raw": [
+          -39,
+          -39,
+          4039
+        ],
+        "acc_raw_bytes": [
+          127,
+          127,
+          179
+        ],
+        "lat": 0.0,
+        "lon": 0.0,
+        "alt": 0,
+        "sat": 0,
+        "time": 0,
+        "awake": 150,
+        "sleep": 10,
+        "gpio": 0
+      }
+    },
+    {
+      "name": "edges",
+      "description": "In-range extremes: battery and accelerometer exactly at map edges.",
+      "saturating": false,
+      "hex": "D8 64 F8 2A FF FF FF 00 FF 7F 7F 4A 5D 05 01 6B 45 F5 78 26 FF FF FF FF FF FF 78 03",
+      "expected": {
+        "temp": -40,
+        "hum": 100,
+        "pres": 11000,
+        "bat_mv": 4300,
+        "lux": 65535,
+        "acc": [
+          -10000,
+          10000,
+          0
+        ],
+        "lat": 89999999,
+        "lon": -179999999,
+        "alt": 8848,
+        "sat": 255,
+        "time": 4294967295,
+        "awake": 255,
+        "sleep": 120,
+        "gpio": 3
+      },
+      "decoded": {
+        "temp": -40,
+        "hum": 100,
+        "pres": 11000,
+        "bat_mv": 4300,
+        "bat_raw": 255,
+        "lux": 65535,
+        "acc_raw": [
+          -10000,
+          10000,
+          -39
+        ],
+        "acc_raw_bytes": [
+          0,
+          255,
+          127
+        ],
+        "lat": 89.999999,
+        "lon": -179.999999,
+        "alt": 8848,
+        "sat": 255,
+        "time": 4294967295,
+        "awake": 255,
+        "sleep": 120,
+        "gpio": 3
+      }
+    },
+    {
+      "name": "deep_winter_long_sleep",
+      "description": "Max sleep index from SLEEP_T (120 min), gpio bits set.",
+      "saturating": false,
+      "hex": "E7 47 B4 28 00 03 00 80 7E E5 06 04 DA 02 58 86 03 00 4E 04 09 00 B9 55 69 C8 78 03",
+      "expected": {
+        "temp": -25,
+        "hum": 71,
+        "pres": 10420,
+        "bat_mv": 2500,
+        "lux": 3,
+        "acc": [
+          64,
+          -64,
+          8000
+        ],
+        "lat": 47842310,
+        "lon": 231000,
+        "alt": 102,
+        "sat": 9,
+        "time": 1767225600,
+        "awake": 200,
+        "sleep": 120,
+        "gpio": 3
+      },
+      "decoded": {
+        "temp": -25,
+        "hum": 71,
+        "pres": 10420,
+        "bat_mv": 2500,
+        "bat_raw": 0,
+        "lux": 3,
+        "acc_raw": [
+          39,
+          -118,
+          7961
+        ],
+        "acc_raw_bytes": [
+          128,
+          126,
+          229
+        ],
+        "lat": 47.84231,
+        "lon": 0.231,
+        "alt": 102,
+        "sat": 9,
+        "time": 1767225600,
+        "awake": 200,
+        "sleep": 120,
+        "gpio": 3
+      }
+    },
+    {
+      "name": "acc_saturation",
+      "description": "Saturating: raw 15000 exceeds the \u00b110000 map range. v2 clamps to 255; v1 firmware would wrap to 62. Flagged divergent.",
+      "saturating": true,
+      "hex": "1E 28 10 27 FF 0A 00 FF 00 7F 00 00 00 00 00 00 00 00 E8 03 00 64 00 00 00 0A 01 00",
+      "expected": {
+        "temp": 30,
+        "hum": 40,
+        "pres": 10000,
+        "bat_mv": 4500,
+        "lux": 10,
+        "acc": [
+          15000,
+          -15000,
+          0
+        ],
+        "lat": 0,
+        "lon": 0,
+        "alt": 0,
+        "sat": 0,
+        "time": 100,
+        "awake": 10,
+        "sleep": 1,
+        "gpio": 0
+      },
+      "decoded": {
+        "temp": 30,
+        "hum": 40,
+        "pres": 10000,
+        "bat_mv": 4300,
+        "bat_raw": 255,
+        "lux": 10,
+        "acc_raw": [
+          10000,
+          -10000,
+          -39
+        ],
+        "acc_raw_bytes": [
+          255,
+          0,
+          127
+        ],
+        "lat": 0.0,
+        "lon": 0.0,
+        "alt": 0,
+        "sat": 0,
+        "time": 100,
+        "awake": 10,
+        "sleep": 1,
+        "gpio": 0
+      }
+    }
+  ]
+}

@@ -19,7 +19,7 @@ built from, and the candidates for the next revision
 | [Datasheets/opt3001.pdf](Datasheets/opt3001.pdf) | OPT3001 | ambient light (U5) |
 | [Datasheets/AO3400A.pdf](Datasheets/AO3400A.pdf) | AO3400A | N-FET load switches (Q1/Q3) |
 | [Datasheets/SGM6029.pdf](Datasheets/SGM6029.pdf) | SGM6029 | 2.3 µA-Iq synchronous buck — the 3.3 V rail (U9) |
-| — | CN3163 | USB-side Li-ion charger (U) — **datasheet TODO, see below** |
+| [Datasheets/CN3163.pdf](Datasheets/CN3163.pdf) | CN3163 | USB-side Li-ion charger (U) — its exact battery-drain spec remains an open question (HW doc §9.7) |
 | [Datasheets/CN3165.pdf](Datasheets/CN3165.pdf) | CN3165 | solar Li-ion charger (U8) |
 
 ## Next-hardware candidates
@@ -36,12 +36,5 @@ built from, and the candidates for the next revision
 | [Datasheets/XIAO-ES32C6.txt](Datasheets/XIAO-ES32C6.txt) | Seeed XIAO ESP32-C6 pinout notes — the carrier layout this board inherits |
 | [Schematics/XIAO ESP32 C6_v1.0_SCH_PDF_24028.pdf](Schematics/XIAO%20ESP32%20C6_v1.0_SCH_PDF_24028.pdf) | the XIAO schematic |
 
-## TODO
-
-- `CN3163.pdf` — **placeholder**: no direct PDF could be retrieved
-  (LCSC/alldatasheet block scripting). Grab it from
-  [alldatasheet (CONSONANCE CN3163)](https://www.alldatasheet.com/datasheet-pdf/pdf/1133223/CONSONANCE/CN3163.html)
-  or the JLCPCB part page. The [CN3165 sheet](Datasheets/CN3165.pdf) covers
-  the family behavior (solar-adaptive input, <3 µA battery drain with no
-  input); the CN3163-specific quiescent spec is still an open question in
-  the hardware doc (§9, item 7).
+Still worth exporting from KiCad: a **PDF of the board's own schematic**
+(`MiniLora.kicad_sch`) — right now it exists only as source.

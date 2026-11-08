@@ -85,6 +85,16 @@ table.cfgtbl tr:hover td { background: none; }
 table.cfgtbl td:first-child { font-weight: 600; }
 .cfgbtns button { padding: 2px 14px; font-size: 13px; }
 
+/* settings page (config editor) */
+.cfgtable { width: 100%; border-collapse: collapse; }
+.cfgtable td { padding: 3px 8px 3px 0; vertical-align: middle; }
+.cfgtable td:first-child { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.cfgtable input, .cfgtable select { background: var(--panel2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; }
+.cfgtable textarea { background: var(--panel2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px; padding: 6px;
+  font-family: monospace; }
+
 /* graph window selector (charts page) */
 .rangebar { display: flex; align-items: center; gap: 6px;
             margin: 0 0 12px; flex-wrap: wrap; }

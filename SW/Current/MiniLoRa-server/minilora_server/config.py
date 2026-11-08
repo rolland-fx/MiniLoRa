@@ -1,7 +1,7 @@
 """MiniLoRa-server configuration (TOML, stdlib tomllib)."""
 
 import tomllib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields as _dc_fields
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -85,6 +85,45 @@ class AppConfig:
     device_groups: Dict[str, List[str]] = field(default_factory=dict)
 
 
+# Path of the config file load_config() actually used — the settings page
+# writes edits back to it. Empty string = no file was found; the settings
+# page then falls back to ./config.toml.
+CONFIG_PATH_USED = ""
+
+
+def dump_config(cfg: AppConfig) -> str:
+    """Serialize the config back to TOML for the settings page.
+
+    Comments from the original file are lost (the UI says so); env
+    overrides (MINILORA_*) still win at load time.
+    """
+    import json as _json
+
+    def fmt(v):
+        if isinstance(v, bool):
+            return "true" if v else "false"
+        if isinstance(v, str):
+            return _json.dumps(v)      # a TOML basic string for plain values
+        if isinstance(v, list):
+            return "[" + ", ".join(_json.dumps(x) for x in v) + "]"
+        return str(v)
+
+    lines = []
+    for name, obj in (("server", cfg.server), ("wifi", cfg.wifi),
+                      ("ttn", cfg.ttn), ("ha", cfg.ha),
+                      ("retention", cfg.retention)):
+        lines.append(f"[{name}]")
+        for f in _dc_fields(obj):
+            lines.append(f"{f.name} = {fmt(getattr(obj, f.name))}")
+        lines.append("")
+    if cfg.device_groups:
+        lines.append("[device_groups]")
+        for k, ids in cfg.device_groups.items():
+            lines.append(f"{_json.dumps(k)} = {fmt(list(ids))}")
+        lines.append("")
+    return "\n".join(lines) + "\n"
+
+
 def load_config(path: Optional[str] = None) -> AppConfig:
     """Load config.toml (missing keys/sections fall back to defaults).
 
@@ -147,4 +186,7 @@ def load_config(path: Optional[str] = None) -> AppConfig:
         cfg.server.log_max_mb = int(os.environ["MINILORA_LOG_MAX_MB"])
     if os.environ.get("MINILORA_LOG_BACKUPS"):
         cfg.server.log_backups = int(os.environ["MINILORA_LOG_BACKUPS"])
+
+    global CONFIG_PATH_USED
+    CONFIG_PATH_USED = path or ""
     return cfg

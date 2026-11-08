@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Settings — MiniLoRa-server{% endblock %}
+{% block content %}
+<h1>Settings — config.toml</h1>
+
+<p class="muted">Saving rewrites <code>{{ config_path }}</code> — comments
+  in the file are lost. Values set through environment variables
+  (<code>MINILORA_DB</code>, <code>MINILORA_HOST</code>,
+  <code>MINILORA_PORT</code>, <code>MINILORA_LOG_*</code>) override the
+  file at load time and cannot be changed here.
+  <strong>Most changes need a restart</strong> (the button at the bottom
+  exits the process — Docker or systemd brings it straight back; a bare
+  manual run stays down).</p>
+{% if saved %}<p style="color: var(--accent2)">✓ saved</p>{% endif %}
+
+<form id="cfgform">
+  {% for section in sections %}
+  <div class="panel">
+    <h2>{{ section.title }}</h2>
+    <table class="cfgtable">
+      {% for f in section.fields %}
+      <tr>
+        <td><code>{{ section.key }}.{{ f.name }}</code></td>
+        <td>
+          {% if f.type == 'bool' %}
+          <select name="{{ section.key }}.{{ f.name }}">
+            <option value="true" {% if f.value %}selected{% endif %}>true</option>
+            <option value="false" {% if not f.value %}selected{% endif %}>false</option>
+          </select>
+          {% elif f.type == 'int' %}
+          <input type="number" name="{{ section.key }}.{{ f.name }}"
+                 value="{{ f.value }}" step="1">
+          {% elif f.type == 'list' %}
+          <input type="text" name="{{ section.key }}.{{ f.name }}"
+                 value="{{ f.value | join(', ') }}" size="30">
+          {% else %}
+          <input type="{% if f.sensitive %}password{% else %}text{% endif %}"
+                 name="{{ section.key }}.{{ f.name }}" value="{{ f.value }}"
+                 size="34" {% if f.sensitive %}autocomplete="off"{% endif %}>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endfor %}
+
+  <div class="panel">
+    <h2>Device groups</h2>
+    <p class="muted">One group per line: <code>Name = id1, id2</code> — a
+      tracker reporting under several identities renders as one row.</p>
+    <textarea name="device_groups" rows="4" cols="50">{{ device_groups }}</textarea>
+  </div>
+
+  <p>
+    <button type="button" onclick="saveConfig(false)">Save</button>
+    <button type="button" onclick="saveConfig(true)" class="danger">Save &amp; restart</button>
+    <span id="msg" class="muted"></span>
+  </p>
+</form>
+
+<script>
+async function saveConfig(restart) {
+  const msg = document.getElementById('msg');
+  msg.textContent = 'saving…';
+  try {
+    const r = await fetch('/api/config',
+                          { method: 'POST', body: new FormData(document.getElementById('cfgform')) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { msg.textContent = 'failed: ' + (j.detail || r.status); return; }
+    msg.textContent = 'saved to ' + j.saved;
+    if (restart) {
+      const r2 = await fetch('/api/restart', { method: 'POST' });
+      if (r2.ok) {
+        msg.textContent = 'saved — restarting, page reloads when it is back…';
+        setTimeout(() => location.reload(), 6000);
+      } else {
+        msg.textContent = 'saved, but restart failed: HTTP ' + r2.status;
+      }
+    } else {
+      setTimeout(() => { location.href = '/settings?saved=1'; }, 800);
+    }
+  } catch (e) { msg.textContent = 'failed: ' + e; }
+}
+</script>
+{% endblock %}

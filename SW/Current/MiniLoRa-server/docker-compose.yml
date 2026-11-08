@@ -20,11 +20,12 @@ services:
       - "8080:8080"
     volumes:
       - ./data:/data:z
-      # Edit config.toml (copy from config.example.toml); restart to apply.
-      # The :z relabels the file for SELinux hosts (Fedora/RHEL) — harmless
-      # elsewhere. The container always serves on 8080 regardless of the
-      # config's [server] port.
-      - ./config.toml:/config/config.toml:ro,z
+      # Edit config.toml (copy from config.example.toml) OR from the
+      # server's Settings page. The :z relabels for SELinux hosts
+      # (Fedora/RHEL) — harmless elsewhere. The mount is READ-WRITE: the
+      # Settings page saves edits into it. The container always serves on
+      # 8080 regardless of the config's [server] port.
+      - ./config.toml:/config/config.toml:z
     environment:
       MINILORA_CONFIG: /config/config.toml
       MINILORA_DB: /data/minilora.sqlite3

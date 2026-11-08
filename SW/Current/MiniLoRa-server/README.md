@@ -68,6 +68,8 @@ db_max_mb = 100
   tracker's WiFi push has **no token support in the firmware yet** —
   enabling it would drop every device push. (Adding `?token=` to
   `WifiTransport` is a one-line firmware change if you ever need it.)
+  The **Settings page** can also rewrite `config.toml` and restart the
+  service — fine on your LAN, catastrophic if exposed.
 - **Health**: the image ships a `HEALTHCHECK` on `/health` — `docker ps`
   shows healthy/unhealthy and `restart: unless-stopped` recovers crashes.
 - **Both log streams are capped**: the app's rotating file (see above) and
@@ -186,6 +188,7 @@ on the map and charts.
 | `/device/{id}/data` | maintenance (TTN fetch-now, prune windows, delete) + the readings table — on a group page the `src` column shows each row's transport and deletes stay per-identity |
 | `/device/{id}/diagnostics` | diag-frame history: boots, unexpected resets, every failure counter, power flags (`LOW BAT`/`CRIT`), OTA-pending, recovery mode, `config_flags` |
 | `/device/{id}/analytics` | **range picker (7/30/90/365 d/all)**, summary cards (avg/min/max temp, humidity, pressure, battery slope mV/day, GPS distance, radio-on time), per-day min/avg/max charts, coverage bars — all backed by SQLite aggregates |
+| `/settings` | **Settings — edit every `config.toml` element** from the browser (server, TTN, WiFi, HA bridge, retention, device groups), save it atomically, and restart the service so it applies. In Docker the config mount is read-write for this; comments in the file are lost on save |
 | `/config-builder` | **device `.cfg` file generator** — fill the form (identity, WiFi, transports, sleep, asset mode), download the native 168-byte ICD §4 envelope, import it in the Android app (Provision → Import .cfg) and write it over BLE. The file contains keys in clear text — treat it like a credential |
 | `/api/docs` | interactive OpenAPI for all endpoints |
 

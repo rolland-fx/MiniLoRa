@@ -52,7 +52,7 @@ done
 
 [[ $EUID -eq 0 ]] || die "run as root on the Proxmox host (pct/pvesh need it)"
 
-[[ -n "$SRC" ]] || SRC="$(cd "$(dirname "$0")" && pwd)"
+[[ -n "$SRC" ]] || SRC="$(cd "$(dirname "$0")/.." && pwd)"
 
 # ---------- target container: create (fresh) or reuse (update) ----------
 if [[ -n "$UPDATE_CT" ]]; then
@@ -125,9 +125,13 @@ if [ -f /tmp/minilora-src.tar.gz ]; then
   rm -f /tmp/minilora-src.tar.gz
 elif [ -n "${REPO_URL:-}" ]; then
   git clone --depth 1 ${BRANCH:+-b "$BRANCH"} "$REPO_URL" /tmp/src-dl
+  # The published repo nests the server under SW/Current/MiniLoRa-server;
+  # a repo that IS the server (no nesting) also works.
+  SRC_ROOT=/tmp/src-dl/SW/Current/MiniLoRa-server
+  [ -d "$SRC_ROOT" ] || SRC_ROOT=/tmp/src-dl
   rm -rf "$APP_DIR/minilora_server" "$APP_DIR/templates" "$APP_DIR/static" \
          "$APP_DIR/requirements.txt" "$APP_DIR/deploy"
-  cp -a /tmp/src-dl/. "$APP_DIR/"
+  cp -a "$SRC_ROOT/." "$APP_DIR/"
   rm -rf /tmp/src-dl
 elif [ -f "$APP_DIR/minilora_server/main.py" ]; then
   echo "source already staged — reusing $APP_DIR"

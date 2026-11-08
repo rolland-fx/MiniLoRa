@@ -8,8 +8,11 @@ storage API, stores everything in SQLite and serves a graphed web UI.
 import asyncio
 import hashlib
 import logging
+import os
 import re
+import signal
 import time
+from dataclasses import fields as dc_fields
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -22,7 +25,8 @@ from fastapi.responses import (HTMLResponse, JSONResponse, PlainTextResponse,
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from .config import AppConfig, load_config
+from .config import AppConfig, dump_config, load_config
+from . import config as _configmod
 from .decode import decode_diagnostics, decode_telemetry
 from .cfgbuild import SLEEP_MINUTES
 from .db import Database
@@ -209,6 +213,141 @@ async def api_retention():
         "db_max_mb": cfg.retention.db_max_mb,
         "db_size_mb": round(db.size_bytes() / 1e6, 2),
     }
+
+
+# ------------------------- settings (config UI) -------------------------
+
+def _settings_sections() -> list:
+    """Field specs for the settings page: one block per config section."""
+    out = []
+    for key, title, obj in (
+            ("server", "Server", cfg.server),
+            ("wifi", "WiFi push", cfg.wifi),
+            ("ttn", "TTN", cfg.ttn),
+            ("ha", "Home Assistant bridge", cfg.ha),
+            ("retention", "Retention (database cap)", cfg.retention)):
+        fields = []
+        for f in dc_fields(obj):
+            cur = getattr(obj, f.name)
+            if isinstance(cur, bool):
+                ftype = "bool"
+            elif isinstance(cur, int):
+                ftype = "int"
+            elif isinstance(cur, list):
+                ftype = "list"
+            else:
+                ftype = "str"
+            fields.append({
+                "name": f.name,
+                "type": ftype,
+                "value": cur,
+                "sensitive": any(s in f.name for s in
+                                 ("key", "token", "password")),
+            })
+        out.append({"key": key, "title": title, "fields": fields})
+    return out
+
+
+@app.get("/settings", response_class=HTMLResponse)
+async def ui_settings(request: Request):
+    """Edit every config.toml element from the browser; save rewrites the
+    file, and the restart button applies it."""
+    groups = "\n".join(f"{k} = {', '.join(v)}"
+                       for k, v in cfg.device_groups.items())
+    return TEMPLATES.TemplateResponse(request, "settings.html", {
+        "stats": db.stats(),
+        "sections": _settings_sections(),
+        "device_groups": groups,
+        "config_path": _configmod.CONFIG_PATH_USED or "config.toml",
+        "saved": request.query_params.get("saved") == "1",
+    })
+
+
+def _apply_form(new_cfg: AppConfig, form: dict) -> None:
+    """Coerce posted form fields ('section.field' keys) onto a fresh
+    AppConfig. Unknown keys are ignored; bad values raise HTTPException."""
+    sections = {"server": new_cfg.server, "wifi": new_cfg.wifi,
+                "ttn": new_cfg.ttn, "ha": new_cfg.ha,
+                "retention": new_cfg.retention}
+    for key, raw in form.items():
+        if "." not in key:
+            continue
+        sec, field = key.split(".", 1)
+        obj = sections.get(sec)
+        if obj is None:
+            continue
+        names = [f.name for f in dc_fields(obj)]
+        if field not in names:
+            continue
+        cur = getattr(obj, field)
+        try:
+            if isinstance(cur, bool):
+                setattr(obj, field, str(raw).lower() in ("true", "on", "1"))
+            elif isinstance(cur, int):
+                setattr(obj, field, int(raw))
+            elif isinstance(cur, list):
+                setattr(obj, field,
+                        [x.strip() for x in str(raw).split(",") if x.strip()])
+            else:
+                setattr(obj, field, str(raw))
+        except ValueError:
+            raise HTTPException(400, f"{key}: '{raw}' is not a valid "
+                                     f"{type(cur).__name__}")
+    groups = {}
+    for line in str(form.get("device_groups", "")).splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        ids = [x.strip() for x in v.split(",") if x.strip()]
+        if ids:
+            groups[k.strip()] = ids
+    new_cfg.device_groups = groups
+
+
+def _validate_config(new_cfg: AppConfig) -> None:
+    """Fail loudly rather than write a config that breaks boot."""
+    if not 1 <= new_cfg.server.port <= 65535:
+        raise HTTPException(400, "server.port must be 1..65535")
+    if new_cfg.retention.db_max_mb < 1:
+        raise HTTPException(400, "retention.db_max_mb must be >= 1")
+    if new_cfg.retention.check_interval_s < 60:
+        raise HTTPException(400, "retention.check_interval_s must be >= 60")
+    if new_cfg.ttn.poll_interval_s < 30:
+        raise HTTPException(400, "ttn.poll_interval_s must be >= 30")
+
+
+@app.post("/api/config")
+async def api_config_save(request: Request):
+    """Validate the posted form and rewrite config.toml. Takes effect at
+    the next restart (POST /api/restart, or the service supervisor)."""
+    form = await request.form()
+    new_cfg = AppConfig()
+    _apply_form(new_cfg, dict(form))
+    _validate_config(new_cfg)
+
+    path = _configmod.CONFIG_PATH_USED or "config.toml"
+    tmp = path + ".tmp"
+    Path(tmp).write_text(dump_config(new_cfg), encoding="utf-8")
+    os.replace(tmp, path)          # atomic: no half-written config on boot
+    log.info("config saved to %s from the settings page", path)
+    return {"saved": str(path),
+            "note": "takes effect at the next restart (POST /api/restart)"}
+
+
+@app.post("/api/restart")
+async def api_restart():
+    """Exit the process so the supervisor restarts it with the new config:
+    Docker (restart: unless-stopped) and systemd (Restart=always) both do.
+    A bare foreground run just stays down — the UI says so."""
+    async def _exit_soon():
+        await asyncio.sleep(0.8)   # let the response reach the client
+        log.warning("restart requested from the settings page — exiting")
+        os.kill(os.getpid(), signal.SIGTERM)
+    asyncio.get_running_loop().create_task(_exit_soon())
+    return {"restarting": True,
+            "note": "the server exits now; Docker/systemd restarts it "
+                    "with the saved config"}
 
 
 # ------------------------- config builder -------------------------

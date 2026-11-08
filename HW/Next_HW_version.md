@@ -438,9 +438,11 @@ datasheets):
 6. **Wio-S3 datasheet pinout**: which RTC-capable GPIOs are actually
    exposed on the 38-pin header — finalizes the §6 candidate map (and
    answers the 2.4 GHz antenna routing question in §1.5).
-7. **CN3163 battery-drain spec**: verify the CN31xx "<3 µA with no input"
-   family claim on the USB charger's own datasheet (the §7 consolidation
-   decision needs the real number).
+7. ~~**CN3163 battery-drain spec**~~ — **ANSWERED 2026-11-08** from the
+   datasheet (now in `DOC/Datasheets/CN3163.pdf`): *"BAT pin draws less
+   than 3uA current in sleep mode"* — the family claim holds for the USB
+   charger too. The §7 consolidation decision is now purely a
+   measured-current question (up to 6 µA combined worst case).
 8. **PA1010D standby current on Beta 5**: measure in the Joulescope
    session — the biggest sleep-budget unknown (§5.1); the M10S + load
    switch removes it either way, but the number sizes the win.

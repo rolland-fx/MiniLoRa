@@ -150,18 +150,40 @@ External Connector Mapping
 
 ## 🚀 Planning & next steps
 
-The roadmaps are **living documents**, not a static list:
+The roadmaps are **living documents** — [HW/Next_HW_version.md](HW/Next_HW_version.md),
+[SW/Current/docs/Next-Improv.md](SW/Current/docs/Next-Improv.md) and
+[SW/Current/docs/Next-AP-Initial.md](SW/Current/docs/Next-AP-Initial.md) —
+each with its own decision log. The distilled state:
 
-* **[HW/Next_HW_version.md](HW/Next_HW_version.md)** — the next hardware
-  revision: Wio-S3 SoC+LoRa module, MAX-M10S GNSS with its reference
-  circuit (§2.5), the sensor plan (§5), RTC-pin plan (§6), power review
-  (§7) and the decision log with the field verdicts.
-* **[SW/Current/docs/Next-Improv.md](SW/Current/docs/Next-Improv.md)** —
-  the derived-data & feature backlog: server-side analytics (delivery
-  ratio, battery projection, missed-cycle detection…), on-board payload
-  candidates, app ideas, and the wake-on-motion verification checklist.
-* **[SW/Current/docs/Next-AP-Initial.md](SW/Current/docs/Next-AP-Initial.md)**
-  — the planned app-free captive-portal initial configuration.
+**Already done** (struck from every wishlist): remote config over LoRa
+downlink, OTA with WiFi force+restore, wake-on-motion asset mode (all in
+fw 2.6.16), bounded logs + 100 MB-capped database, Docker + Proxmox LXC
+deployment, the self-made ESP32-C6-MINI-1 board, the CN3165 solar
+charger, repo reorganization and the public release.
+
+**Next moves — hardware** (gated by the §5 prototype-first rule):
+
+1. **Bench session on a Wio-S3 dev board**: firmware port + deep-sleep
+   current measurement — the go/no-go for the next PCB (§1.4, §1.6).
+2. **LIS3DH wake→read timing check** (the constant-133 question) —
+   load-bearing for asset mode (§5.3).
+3. **Asset-mode field test**: shake test, `wake=motion` burst cycle,
+   battery slope before/after (§5.3).
+4. **Wio-S3 datasheet answers**: 2.4 GHz antenna routing + which RTC
+   pins the 38-pin header exposes — finalizes the §6 pin plan.
+
+**Next moves — server** (no hardware needed, any order):
+
+1. **Delivery ratio from TTN `f_cnt`** — the definitive link-health
+   answer, one query (Next-Improv.md).
+2. **Battery projection + missed-cycle detection** — turn two graphs
+   into two warnings.
+3. **Energy audit** — measures the real cost of every hardware change.
+4. Then the sensor-analytics menu: dew point, pressure trend, geofences,
+   odometer, motion index.
+
+**Next moves — app**: local notifications (no-data / low-battery /
+geofence), then the captive-portal first config (Next-AP-Initial.md).
 
 Still open on the hardware wishlist: JST 2.0 → PH1.25 battery connector,
 1.25 mm-pitch external connector, better thermal isolation for the BME280.

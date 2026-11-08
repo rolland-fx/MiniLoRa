@@ -6,6 +6,8 @@
 #   bash -c "$(curl -fsSL https://raw.githubusercontent.com/rolland-fx/MiniLoRa/main/SW/Current/MiniLoRa-server/deploy/proxmox-lxc.sh)"
 #   bash -c "$(curl -fsSL https://raw.githubusercontent.com/rolland-fx/MiniLoRa/main/SW/Current/MiniLoRa-server/deploy/proxmox-lxc.sh)" \
 #     --id 120 --ip 192.168.1.50/24 --gateway 192.168.1.1
+#   bash -c "$(curl -fsSL ...)" -- --rootfs-storage local-lvm   # if the
+#     auto-detected rootfs storage is wrong on your box
 #
 # From a local clone (uses the checkout next to this script — no download):
 #   bash deploy/proxmox-lxc.sh
@@ -26,7 +28,10 @@ MEM_MB=512
 CORES=1
 DISK_GB=4
 BRIDGE=vmbr0
-STORAGE=local
+STORAGE=local         # where the Debian template is downloaded (vztmpl)
+ROOTFS=""             # rootfs storage: defaults to auto-detect (rootdir-
+                      # capable, prefers local-lvm); --storage forces both,
+                      # --rootfs-storage forces just the rootfs
 CTID=""
 CTIP=""
 CTGW=""
@@ -46,7 +51,8 @@ while [[ $# -gt 0 ]]; do
     --ip)       CTIP="$2"; shift 2 ;;
     --gateway)  CTGW="$2"; shift 2 ;;
     --bridge)   BRIDGE="$2"; shift 2 ;;
-    --storage)  STORAGE="$2"; shift 2 ;;
+    --storage)  STORAGE="$2"; ROOTFS="$2"; shift 2 ;;
+    --rootfs-storage) ROOTFS="$2"; shift 2 ;;
     --password) PASS="$2"; shift 2 ;;
     --repo)     REPO="$2"; shift 2 ;;
     --branch)   BRANCH="$2"; shift 2 ;;
@@ -84,6 +90,21 @@ else
   TEMPLATE="$(pveam list "$STORAGE" | awk '/debian-12-standard/{print $1; exit}')"
   ok "template: $TEMPLATE"
 
+  # The rootfs needs a storage with 'rootdir' content — 'local' usually
+  # only holds ISOs/templates ("storage 'local' does not support container
+  # directories"). Auto-detect: prefer local-lvm, else the first active
+  # rootdir-capable storage; --rootfs-storage overrides, --storage pins both.
+  if [[ -z "$ROOTFS" ]]; then
+    msg "detecting a rootfs-capable storage"
+    ROOTFS="$(pvesm status -content rootdir 2>/dev/null | awk 'NR>1 && /active/{print $1}' | grep -m1 '^local-lvm$' || true)"
+    [[ -n "$ROOTFS" ]] || ROOTFS="$(pvesm status -content rootdir 2>/dev/null | awk 'NR>1 && /active/{print $1}' | head -1)"
+    if [[ -z "$ROOTFS" ]]; then
+      ROOTFS="$STORAGE"
+      msg "no rootdir storage detected — falling back to '$STORAGE'; if pct create fails, pass --rootfs-storage <name>"
+    fi
+  fi
+  ok "rootfs storage: $ROOTFS"
+
   [[ -n "$CTID" ]] || CTID="$(pvesh get /cluster/nextid)"
   [[ -n "$PASS"  ]] || PASS="$(head -c 12 /dev/urandom | base64 | tr -d '=+/')"
 
@@ -96,7 +117,7 @@ else
   msg "creating CT $CTID (${CT_HOSTNAME}, ${MEM_MB} MB, ${DISK_GB} GB, unprivileged)"
   pct create "$CTID" "$TEMPLATE" \
     --hostname "$CT_HOSTNAME" --memory "$MEM_MB" --cores "$CORES" \
-    --rootfs "${STORAGE}:${DISK_GB}" --net0 "$NET" \
+    --rootfs "${ROOTFS}:${DISK_GB}" --net0 "$NET" \
     --unprivileged 1 --onboot 1 --start 1 --password "$PASS" \
     --description "MiniLoRa-server (LAN tracker backend)" >/dev/null
   ok "CT $CTID created and started"

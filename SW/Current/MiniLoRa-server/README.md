@@ -107,10 +107,16 @@ Options go right after (bash -c form: separated by `--`; piped form:
 ```bash
 bash -c "$(curl -fsSL ...proxmox-lxc.sh)" -- --id 120 --ip 192.168.1.50/24 --gateway 192.168.1.1
 bash -c "$(curl -fsSL ...proxmox-lxc.sh)" -- --update 120   # re-pull code + restart
+bash -c "$(curl -fsSL ...proxmox-lxc.sh)" -- --rootfs-storage local-lvm
 ```
 
-From a local clone of this repo, `bash deploy/proxmox-lxc.sh` uses that
-checkout instead of downloading (and `--repo <url>` overrides the source).
+The rootfs lands on a storage that supports container volumes
+(auto-detected, `local-lvm` preferred — `local` usually only holds
+ISOs/templates and would fail with *"does not support container
+directories"*); `--rootfs-storage` overrides, `--storage` pins both the
+template and the rootfs. From a local clone of this repo,
+`bash deploy/proxmox-lxc.sh` uses that checkout instead of downloading
+(and `--repo <url>` overrides the source).
 
 512 MB RAM / 1 core / 4 GB disk. Data in `/opt/minilora-server/data`
 (bounded logs + the 100 MB retention apply), config written once at

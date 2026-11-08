@@ -10,10 +10,11 @@ Discord server dedicated to this project :
 -->
 ## Table of Contents
 
-- [✨ What's MiniLoRa?](#-whats-MiniLoRa)
-- [⚙️ Hardware Overview](#-hardware-overview)
+- [✨ What's MiniLoRa?](#-whats-minilora)
+- [⚙️ Hardware Overview](#️-hardware-overview)
 - [💾 Software Overview](#-software-overview)
-- [🚀To Do and Next Steps](#-to-do-and-next-steps)
+- [🚀 Planning & next steps](#-planning--next-steps)
+- [📷 Screenshots](#-screenshots)
 
 ## 🏁 Getting started
 
@@ -35,7 +36,7 @@ Small size multi-purpose **ESP32-C6** board with **LoRa** and **2.4 GHz** connec
 
 ### Features
 
-* ESP32-C6 -> <a href="./DOC/Datasheets/esp32-c6.pdf">XIAO-ESP32C6</a>
+* ESP32-C6 module -> <a href="./DOC/Datasheets/ESP32-C6-MINI-1.pdf">ESP32-C6-MINI-1 (module)</a> · <a href="./DOC/Datasheets/esp32-c6.pdf">esp32-c6 (chip)</a>
   * 32 bits RISC-V Main processor : 160 MHz
   * 32 bits RISC-V Low power processor : 20 MHz
   * 512 KB RAM
@@ -51,7 +52,9 @@ Small size multi-purpose **ESP32-C6** board with **LoRa** and **2.4 GHz** connec
 * GNSS with integrated antenna and PPS -> <a href="./DOC/Datasheets/CD-PA1010D.pdf">CD-PA1010D</a>
 * Temperature, humidity and pressure sensor -> <a href="./DOC/Datasheets/bst-bme280-ds002.pdf">BME280</a>
 * Luminosity sensor -> <a href="./DOC/Datasheets/opt3001.pdf">OPT3001</a>
-* 3-axis accelerometer -> <a href="./DOC/Datasheets/lis3dh.pdf">LIS3DH</a>
+* 3-axis accelerometer with wake-on-motion -> <a href="./DOC/Datasheets/lis3dh.pdf">LIS3DH</a>
+* Ultra-low-power 3.3 V rail -> <a href="./DOC/Datasheets/SGM6029.pdf">SGM6029</a> (2.3 µA Iq buck)
+* USB + solar Li-ion charging -> <a href="./DOC/Datasheets/CN3165.pdf">CN3163 / CN3165</a>
 * External connector with : Power, I2C and 1 GPIO
 * 1 user accessible LED
 * 1 user accessible button
@@ -80,9 +83,10 @@ Design with Kicad 9.0
 
 * Full schematic and design can be found under **HW** (`MiniLora.kicad_sch` / `.kicad_pcb`)
 * Production files for the current batch are under **HW/Gerber**, **HW/JLCPCB** and **HW/production**
-* PDF can be found under : **DOC\Schematics**
+* Datasheet index for every part: **[DOC/README.md](DOC/README.md)**
+* PDF can be found under : **DOC/Schematics**
 * The decision log for the next hardware revision: **[HW/Next_HW_version.md](HW/Next_HW_version.md)**
-* Superseded hardware (OLD-BETA5): **[archive/](archive/README.md)**
+* Superseded hardware (OLD-BETA5): kept in the local repository only — not published.
 
 **Enclosure Info**
 
@@ -102,6 +106,16 @@ Design with FreeCad 1.0
 LoRaWAN uplink/downlink reference, Zigbee/Home-Assistant integration.
 The byte-level wire contract lives in [`SW/Current/ICD.md`](SW/Current/ICD.md).
 
+**Firmware (ESP-IDF, v2.6.x)** — remote configuration over LoRa downlink
+(transports, sensors, sleep duration), OTA updates with WiFi force+restore,
+wake-on-motion asset mode, store-and-forward buffer, bounded logs.
+
+**Server (FastAPI + SQLite)** — WiFi push + TTN poller ingestion, graphed
+web UI (per-page routes, grouped devices, range selectors), remote
+commands, OTA firmware hosting, HA bridge via MQTT discovery, and
+LAN-ready deployment: Docker (bounded logs, 100 MB-capped database with
+`/api/retention`) or a [Proxmox LXC](SW/Current/MiniLoRa-server/deploy/proxmox-lxc.sh).
+
 I2C adresses of sensors
 
 | Sensor| ADD|
@@ -113,32 +127,13 @@ I2C adresses of sensors
 
 GPIO Mapping
 
-| GPIO| Usage| Usable in SW ? | ADC ? | LP GPIO ?| Note|
-| --- | --- | --- | --- | --- |---|
-| 0 | WakeUp GNSS | X | X | X | |
-| 1 | LoRa Busy + ACC Interupt | X | X | X | Mixed both signal|
-| 2 | LoRa Reset | X | X | X | |
-| 3 | 2.4 GHz switch EN | X | X | X | |
-| 4 | Bat. Reading En. + External GPIO  | X | X | X | Use to activate External GPIO and EN. Bat reading |
-| 5 | Bat. Analog  | X |X | X | Read Vbat/2 when active |
-| 6 | PPS | X | X | X | |
-| 7 | User Button | X |  | X | |
-| 8 | Not available on XIAO ESP32C6 Module| | | | Strapping pin, HW pull-UP |
-| 9 | Boot| | | | |
-| 10-11 | N/A on ESP32C6 with Inc. FLASH| | | | |
-| 12 | USB DN| | | | Used for serial and prog. |
-| 13 | USB DP| | | | Used for serial and prog. |
-| 14 | 2.4GHz switch Select| X | | | |
-| 15 | Orange LED| X | | | |
-| 16 | LoRa DIO1 | X | | | |
-| 17 | LoRa SPI Select | X | | | |
-| 18 | SPI MOSI | X | | | |
-| 19 | SPI SCK | X | | | |
-| 20 | SPI MISO | X | | | |
-| 21 | LoRa RF Switch | X | | | |
-| 22 | I2C SDA | X | | | |
-| 23 | i2C SPI | X | | | |
-| 24 - 30| Internal SPI FLASH | | | | Not exposed|
+The authoritative pin map is the firmware header
+[`SW/Current/Firmware/main/drivers/Pins.hpp`](SW/Current/Firmware/main/drivers/Pins.hpp) —
+kept in sync with the schematic (the I2C addresses below match it). It also
+documents which pins are RTC/LP-capable (the deep-sleep wake sources:
+button, accelerometer interrupt, GPS PPS on the shared `PPS_INT` net) and
+which enables are held through sleep. The next board's pin plan lives in
+the [hardware planning doc](HW/Next_HW_version.md) (§6).
 
 External Connector Mapping
 
@@ -153,44 +148,23 @@ External Connector Mapping
 | 5 | GPIO6 |
 
 
-## 🚀To Do and Next Steps
+## 🚀 Planning & next steps
 
-Here are the idea for the next improvement and developpement :
+The roadmaps are **living documents**, not a static list:
 
-### Software
+* **[HW/Next_HW_version.md](HW/Next_HW_version.md)** — the next hardware
+  revision: Wio-S3 SoC+LoRa module, MAX-M10S GNSS with its reference
+  circuit (§2.5), the sensor plan (§5), RTC-pin plan (§6), power review
+  (§7) and the decision log with the field verdicts.
+* **[SW/Current/docs/Next-Improv.md](SW/Current/docs/Next-Improv.md)** —
+  the derived-data & feature backlog: server-side analytics (delivery
+  ratio, battery projection, missed-cycle detection…), on-board payload
+  candidates, app ideas, and the wake-on-motion verification checklist.
+* **[SW/Current/docs/Next-AP-Initial.md](SW/Current/docs/Next-AP-Initial.md)**
+  — the planned app-free captive-portal initial configuration.
 
-* Create a first full version in Arduino : Mostly done.
-* Architecture
-  * Create a core with FreeRTOS or Zephyr
-  * Create drivers for all HW
-  * File system for sys. files and data files
-  * Init routine and deep sleep related routine
-  * "1 Button, 1 LED" interface
-* Possible SW usage
-  * Very long battery life LoRaWAN tracker (all sensors) + reverse channel
-  * NTP (GPS with PPS) Wi-Fi server
-  * Indoor Zigbee / Wi-Fi / BLE sensor (all but GPS)  + reverse channel
-  * Outdoor environmental sensor (all sensors)  + reverse channel
-  * Outdoor offline sensor logging (Storage to FLASH)
-  * Anti-theft device (interupt on Acc + all Radios)
-* Other related SW
-  * BLE App for configuration
-  * USB-C (serial) App for configuration  
-
-
-### Hardware
-
-* Size can me optimized
-* GNSS module with external flat antenna
-* Replace JST 2.0 by PH1.25 for the Battery connector
-* Replace External connector by 1.25mm pitch connector
-* Better thermal isolation for BME280
-* Replace XIAO module par self-made ESP32C6 module
-  * Use ESP32-C6FH8 -> 8 MB of FLASH
-  * Remove 2.4 GHz switch to get back 2 GPIO
-  * GPIO 8 : could be used for an OUTPUT (to avoid strapping issue)
-  * Replace BMS for solar cell use and faster charge : CN3165
-  * Chose either chip antenna or external connector 
+Still open on the hardware wishlist: JST 2.0 → PH1.25 battery connector,
+1.25 mm-pitch external connector, better thermal isolation for the BME280.
 
 
 

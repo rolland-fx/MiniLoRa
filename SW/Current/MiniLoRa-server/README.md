@@ -92,17 +92,25 @@ db_max_mb = 100
 
 ## Proxmox VE (LXC, no Docker)
 
-For a dedicated VM-host deployment: `deploy/proxmox-lxc.sh` creates an
+For a dedicated VM-host deployment — **one command on the Proxmox host**
+downloads the installer and the code straight from GitHub and creates an
 **unprivileged Debian 12 LXC** running the server natively (python venv +
-systemd — no Docker nesting, no USB passthrough needed, OTA-only).
+systemd — no Docker nesting, no USB passthrough needed, OTA-only):
 
 ```bash
-# on the Proxmox host, from a clone of this repo (deploy/ dir):
-bash deploy/proxmox-lxc.sh                        # next free CT id, DHCP
-bash deploy/proxmox-lxc.sh --id 120 --ip 192.168.1.50/24 --gateway 192.168.1.1
-bash deploy/proxmox-lxc.sh --repo https://github.com/you/minilora --branch main
-bash deploy/proxmox-lxc.sh --update 120           # re-sync code + restart
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/rolland-fx/MiniLoRa/main/SW/Current/MiniLoRa-server/deploy/proxmox-lxc.sh)"
 ```
+
+Options go right after (bash -c form: separated by `--`; piped form:
+`curl ... | bash -s -- <options>`):
+
+```bash
+bash -c "$(curl -fsSL ...proxmox-lxc.sh)" -- --id 120 --ip 192.168.1.50/24 --gateway 192.168.1.1
+bash -c "$(curl -fsSL ...proxmox-lxc.sh)" -- --update 120   # re-pull code + restart
+```
+
+From a local clone of this repo, `bash deploy/proxmox-lxc.sh` uses that
+checkout instead of downloading (and `--repo <url>` overrides the source).
 
 512 MB RAM / 1 core / 4 GB disk. Data in `/opt/minilora-server/data`
 (bounded logs + the 100 MB retention apply), config written once at

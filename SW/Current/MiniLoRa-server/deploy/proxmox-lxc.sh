@@ -1,18 +1,24 @@
 #!/usr/bin/env bash
 # MiniLoRa-server — Proxmox VE LXC installer
 #
-# Run ON THE PROXMOX HOST:
-#   bash proxmox-lxc.sh                          # next free CT id, DHCP, local source
-#   bash proxmox-lxc.sh --id 120 --ip 192.168.1.50/24 --gateway 192.168.1.1
-#   bash proxmox-lxc.sh --repo https://github.com/you/minilora --branch main
-#   bash proxmox-lxc.sh --update 120             # re-sync code into CT 120 + restart
+# ONE COMMAND (from anywhere — downloads this script and the code from
+# GitHub; run as root on the Proxmox host):
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/rolland-fx/MiniLoRa/main/SW/Current/MiniLoRa-server/deploy/proxmox-lxc.sh)"
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/rolland-fx/MiniLoRa/main/SW/Current/MiniLoRa-server/deploy/proxmox-lxc.sh)" \
+#     --id 120 --ip 192.168.1.50/24 --gateway 192.168.1.1
+#
+# From a local clone (uses the checkout next to this script — no download):
+#   bash deploy/proxmox-lxc.sh
+#
+# Update an existing container (code re-pulled from the same source):
+#   bash -c "$(curl -fsSL ...)" -- --update 120
+#   bash deploy/proxmox-lxc.sh --update 120
 #
 # What it builds: an unprivileged Debian 12 LXC running the server natively
 # (python venv + systemd, NO docker), data in /opt/minilora-server/data,
 # web UI on http://<ct-ip>:8080 — with the bounded-log and 100 MB DB
-# retention already configured. Updates: re-run with --update.
+# retention already configured.
 set -euo pipefail
-
 APP_DIR=/opt/minilora-server
 CT_HOSTNAME=minilora-server
 CT_PORT=8080
@@ -52,7 +58,15 @@ done
 
 [[ $EUID -eq 0 ]] || die "run as root on the Proxmox host (pct/pvesh need it)"
 
-[[ -n "$SRC" ]] || SRC="$(cd "$(dirname "$0")/.." && pwd)"
+# Source mode: executed from a file on disk → use the checkout next to it
+# (no download); piped from curl (`bash -c "$(curl ...)"`) or stdin →
+# default to the GitHub repo unless --repo says otherwise.
+if [[ -f "${BASH_SOURCE:-}" ]]; then
+  [[ -n "$SRC" ]] || SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+elif [[ -z "$REPO" ]]; then
+  REPO="https://github.com/rolland-fx/MiniLoRa"
+  [[ -n "$BRANCH" ]] || BRANCH="main"
+fi
 
 # ---------- target container: create (fresh) or reuse (update) ----------
 if [[ -n "$UPDATE_CT" ]]; then

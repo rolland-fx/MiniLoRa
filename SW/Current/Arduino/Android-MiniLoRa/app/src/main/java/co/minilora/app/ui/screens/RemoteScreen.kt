@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import co.minilora.app.data.model.MiniLoRaCommands
 import co.minilora.app.data.model.MiniLoRaDiag
 import co.minilora.app.ui.AppViewModel
+import co.minilora.app.ui.SectionCard
 import co.minilora.app.ui.model.PayloadHistoryEntry
 import co.minilora.app.util.DeviceConfig
 import kotlinx.coroutines.delay
@@ -87,12 +88,10 @@ fun RemoteScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // ---- commands ----
-        Text("Commands", style = MaterialTheme.typography.titleMedium)
-        Text("Queued to the device's TTN downlink; applied at the start of its next wake cycle.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Card {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionCard("Commands",
+            "Queued to the device's TTN downlink; applied at the start of its next wake cycle.") {
+            Column(Modifier.fillMaxWidth(),
+                   verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = {
                         vm.sendCommand(MiniLoRaCommands.LOCATE_NOW, "Locate now")
@@ -162,9 +161,8 @@ fun RemoteScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
             }
         }
         if (downlinks.isNotEmpty()) {
-            Text("Downlink queue", style = MaterialTheme.typography.titleMedium)
-            Card {
-                Column(Modifier.padding(12.dp),
+            SectionCard("Downlink queue", null) {
+                Column(Modifier.fillMaxWidth(),
                        verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     val fmt = remember {
                         SimpleDateFormat("HH:mm:ss", Locale.getDefault())
@@ -208,15 +206,14 @@ fun RemoteScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
         }
 
         // ---- diagnostics ----
-        Text("Diagnostics", style = MaterialTheme.typography.titleMedium)
         if (diag == null) {
             Text("No diagnostics frame received yet (device sends one every ~16 boots, or on demand).",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             val d = diag!!
-            Card {
-                Column(Modifier.padding(12.dp)) {
+            SectionCard("Diagnostics", null) {
+                Column(Modifier.fillMaxWidth()) {
                     Text("fw ${d.fwVersion} · boot #${d.bootCount}",
                         style = MaterialTheme.typography.titleSmall)
                     diagReceivedAt?.let { at ->
@@ -264,17 +261,12 @@ fun RemoteScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
         }
 
         // ---- remote config (ICD 3.5 §3 CFG_SET) ----
-        Text("Remote config", style = MaterialTheme.typography.titleMedium)
-        Text(
+        SectionCard("Remote config",
             "Toggles a transport or sensor on the device (saved in NVS, " +
                 "survives resets). The switch state comes from the latest " +
                 "diag frame and confirms one cycle after queuing. LoRaWAN " +
-                "is always on; BLE config (long-press) always works.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Card {
-            Column(Modifier.padding(12.dp),
+                "is always on; BLE config (long-press) always works.") {
+            Column(Modifier.fillMaxWidth(),
                    verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 // (label, CFG_SET flag id, diag configFlags bit)
                 val rows = listOf(

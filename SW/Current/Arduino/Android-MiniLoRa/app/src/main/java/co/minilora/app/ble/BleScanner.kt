@@ -23,7 +23,8 @@ import kotlinx.coroutines.flow.StateFlow
 class BleScanner(private val adapter: BluetoothAdapter?) {
 
     data class Hit(val device: DeviceItem,
-                   val payload: co.minilora.app.data.model.MiniLoRaPayload?)
+                   val payload: co.minilora.app.data.model.MiniLoRaPayload?,
+                   val peer: co.minilora.app.data.model.PeerRelayFrame? = null)
 
     private val _hits = MutableStateFlow<List<Hit>>(emptyList())
     val hits: StateFlow<List<Hit>> = _hits
@@ -38,6 +39,11 @@ class BleScanner(private val adapter: BluetoothAdapter?) {
      * multi-tracker feed (each Hit carries the advertising MAC). */
     private val _frames = MutableSharedFlow<Hit>(extraBufferCapacity = 64)
     val frames: MutableSharedFlow<Hit> = _frames
+
+    /** Trek peer-relay advertisements (ICD §10.9): the tracker's peer's
+     * last frame, relayed so both phones can draw both tracks. */
+    private val _peerFrames = MutableSharedFlow<Hit>(extraBufferCapacity = 64)
+    val peerFrames: MutableSharedFlow<Hit> = _peerFrames
 
     private var scanner: android.bluetooth.le.BluetoothLeScanner? = null
     private val callbacks = mutableListOf<ScanCallback>()
@@ -130,8 +136,13 @@ class BleScanner(private val adapter: BluetoothAdapter?) {
         val device = result.device
         val address = device.address
         val now = System.currentTimeMillis()
-        lastProcessedTime[address]?.let { if (now - it < DEBOUNCE_MS) return }
-        lastProcessedTime[address] = now
+        // Debounce keyed by (MAC, packet size): the relay device advertises
+        // its OWN beacon (30 B mfg) and the peer relay (40 B mfg) on the
+        // same MAC within one interval — a plain MAC debounce would drop
+        // one of the two every time.
+        val pktKey = "$address:${packet.size}"
+        lastProcessedTime[pktKey]?.let { if (now - it < DEBOUNCE_MS) return }
+        lastProcessedTime[pktKey] = now
 
         // Debug visibility: one line per device per 500 ms (the debounce
         // above gates it) — shows whether ANY advertisement arrives and
@@ -148,28 +159,39 @@ class BleScanner(private val adapter: BluetoothAdapter?) {
         // its own MAC (multi-tracker reception). The remembered tracker
         // only decides which hit lands in lastPayload (the primary card).
 
-        // Two acceptance paths: a valid MiniLoRa beacon frame (telemetry
-        // beacon), OR the config-window advertisement (name + config
-        // service UUID, no payload). Before the second path existed the
-        // scanner silently dropped the device exactly when the user
-        // needed it most - during provisioning.
-        val payload = MiniLoRaPayloadParser.fromBytes(packet)
+        // Three acceptance paths: a peer-relay advertisement (trek §10.9),
+        // a valid MiniLoRa beacon frame (telemetry beacon), OR the
+        // config-window advertisement (name + config service UUID, no
+        // payload). Before the second path existed the scanner silently
+        // dropped the device exactly when the user needed it most - during
+        // provisioning.
         val isConfigAdv = record.serviceUuids?.any {
             it.uuid == configServiceUuid
         } == true
-        if (payload == null && !isConfigAdv) return
+        val peer = MiniLoRaPayloadParser.peerFromBytes(packet)
+        val payload = MiniLoRaPayloadParser.fromBytes(packet)
+        if (peer == null && payload == null) return
         Log.d("BleScanner",
             "hit $address name='$name' rssi=${result.rssi} " +
-                "configAdv=$isConfigAdv payload=${payload != null}")
+                "configAdv=$isConfigAdv payload=${payload != null} " +
+                "peerRelay=${peer?.deviceKey}")
         val hit = Hit(
             DeviceItem(name = name, address = address,
                 rssi = result.rssi, discoveredAt = now),
             payload,
+            peer,
         )
-        _hits.value = (_hits.value.filterNot { it.device.address == address } + hit)
-            .sortedByDescending { it.device.rssi }
+        // One card per device: the trek relay advertises its own beacon AND
+        // the peer relay on the same MAC — the hit keeps the freshest of each.
+        _hits.value = (listOf(hit) + _hits.value.filterNot {
+            it.device.address == address
+        }).groupBy { it.device.address }.map { (_, group) ->
+            group.reduce { a, b -> a.copy(payload = a.payload ?: b.payload,
+                                          peer = a.peer ?: b.peer) }
+        }.sortedByDescending { it.device.rssi }
         if (nameMatch || macMatch) _lastPayload.value = hit
-        _frames.tryEmit(hit)
+        if (peer != null) _peerFrames.tryEmit(hit)
+        if (payload != null) _frames.tryEmit(hit)
     }
 
     companion object {

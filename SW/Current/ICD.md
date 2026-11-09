@@ -517,13 +517,19 @@ After an exchange each device advertises **two** extended-adv sets for
 **peer-relay** set (sid 1) with the peer's last received frame:
 
 ```
-manufacturer data: FF FF FF | 0x02 | origin (4 B BE) | seq (4 B BE) | body (28 B, §1 plaintext)
+on-air:  [len=40][0xFF][FF][FF][0x02][origin (4 B BE)][seq (4 B BE)][body (28 B, §1 plaintext)]
+
+the len byte is the TRUE structure length (1+2+1+4+4+28 = 40);
+[0xFF] is the AD type, [FF][FF] the v1-parity company id, and the
+0x02 marker distinguishes it from a plain v1 beacon
+([len=29][0xFF][FF][FF][28-byte body]).
 ```
 
-The leading `0x02` type byte distinguishes it from a plain v1 beacon
-(28-byte manufacturer body). The app tags the body under
-`deviceKey = origin-hex` and derives contact status from the adv's
-freshness — no new GATT, no connection.
+The phone reads the manufacturer field as `FF FF | 0x02 | origin | seq |
+body` (39 B) and tags the body under `deviceKey = origin-hex`; contact
+status derives from the adv's freshness — no new GATT, no connection.
+The own beacon keeps the v1-EXACT byte stream (do not "fix" its
+historical length byte — bench-validated 2026-11-01).
 
 ### 10.10 What trek mode must never do
 

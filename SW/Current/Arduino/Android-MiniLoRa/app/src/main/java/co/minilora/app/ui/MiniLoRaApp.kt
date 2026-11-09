@@ -36,10 +36,10 @@ import co.minilora.app.ui.screens.TrackerScreen
 
 /** Top-level destinations. */
 enum class Tab(val label: String, val icon: ImageVector) {
-    TRACKER("Tracker", Icons.Filled.Map),
-    SCAN("Scan", Icons.Filled.BluetoothSearching),
+    TRACKER("Map", Icons.Filled.Map),
+    SCAN("Devices", Icons.Filled.BluetoothSearching),
     REMOTE("Remote", Icons.Filled.SettingsRemote),
-    CONFIG("Provision", Icons.Filled.Tune),
+    CONFIG("Setup", Icons.Filled.Tune),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -89,6 +89,7 @@ fun MiniLoRaApp(vm: AppViewModel, onOpenSettings: () -> Unit) {
                         selected = tab == t,
                         onClick = { tab = t },
                         icon = { Icon(t.icon, contentDescription = t.label) },
+                        alwaysShowLabel = true,
                         label = { Text(t.label) },
                     )
                 }

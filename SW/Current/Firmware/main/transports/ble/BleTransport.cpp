@@ -141,34 +141,10 @@ void stopNimble()
 
 // ---- beacon -------------------------------------------------------------
 
-void startBeaconAdvertisingMfg(const uint8_t *mfg, size_t mfgLen);
-
-void startBeaconAdvertising(const uint8_t *payload, size_t len)
+// Configure the shared ext-adv instance and put `ad` on air (coded PHY,
+// kBeaconIntervalUnits). Both beacon builders funnel through here.
+static void startExtAdvWithData(const uint8_t *ad, size_t n)
 {
-    // v1 manufacturer data: FF FF FF + the raw 28-byte payload (after the
-    // Espressif default company id).
-    uint8_t mfg[3 + 28];
-    size_t mfgLen = 0;
-    mfg[mfgLen++] = 0xFF;
-    mfg[mfgLen++] = 0xFF; // company id LSB (test value, v1 parity)
-    mfg[mfgLen++] = 0xFF; // company id MSB
-    memcpy(mfg + mfgLen, payload, len);
-    mfgLen += len;
-    startBeaconAdvertisingMfg(mfg, mfgLen);
-}
-
-void startBeaconAdvertisingMfg(const uint8_t *mfg, size_t mfgLen)
-{
-    // Manual AD structure: [len][0xFF][manufacturer data]. The length byte
-    // follows the v1 convention (mfgLen - 2) — byte-identical to the old
-    // inline builder for the 28-byte own beacon.
-    uint8_t ad[2 + 2 + 255];
-    size_t n = 0;
-    ad[n++] = static_cast<uint8_t>(mfgLen - 2);
-    ad[n++] = 0xFF;                      // manufacturer data
-    memcpy(ad + n, mfg, mfgLen);
-    n += mfgLen;
-
     ble_gap_ext_adv_params params = {};
     params.own_addr_type = BLE_OWN_ADDR_PUBLIC;
     params.connectable = 0;
@@ -199,6 +175,48 @@ void startBeaconAdvertisingMfg(const uint8_t *mfg, size_t mfgLen)
     }
     rc = ble_gap_ext_adv_start(kExtAdvHandle, BLE_HS_FOREVER, 0);
     ESP_LOGI(TAG, "beacon adv rc=%d", rc);
+}
+
+// Own beacon — the v1-EXACT byte stream (bench-validated 2026-11-01):
+//   [len = 2 + len - 1][0xFF][0xFF][0xFF][payload]
+// The phone's parser keys on this exact shape; do not "clean it up".
+void startBeaconAdvertising(const uint8_t *payload, size_t len)
+{
+    uint8_t ad[2 + 2 + 28];
+    size_t n = 0;
+    ad[n++] = static_cast<uint8_t>(2 + len - 1);
+    ad[n++] = 0xFF;                      // manufacturer data
+    ad[n++] = 0xFF;                      // company id LSB (test value, v1 parity)
+    ad[n++] = 0xFF;                      // company id MSB
+    memcpy(ad + n, payload, len);
+    n += len;
+    startExtAdvWithData(ad, n);
+}
+
+// Peer relay (ICD §10.9) — the own-beacon shape with a 0x02 type marker
+// before the origin:
+//   [len][0xFF][0xFF][0xFF][0x02][origin BE][seq BE][§1 body]
+// The length byte is the TRUE structure length (1+2+1+4+4+body), so the
+// phone's manufacturer field reads [FF][FF][0x02][origin][seq][body] = 39 B.
+void startPeerRelayAdvertising(const uint8_t *body, size_t bodyLen,
+                               uint32_t origin, uint32_t seq)
+{
+    uint8_t ad[4 + 1 + 4 + 4 + 28];
+    size_t n = 0;
+    ad[n++] = static_cast<uint8_t>(1 + 2 + 1 + 4 + 4 + bodyLen);
+    ad[n++] = 0xFF;                      // manufacturer data
+    ad[n++] = 0xFF;                      // company id LSB (v1 parity)
+    ad[n++] = 0xFF;                      // company id MSB
+    ad[n++] = 0x02;                      // peer-relay marker
+    for (int i = 0; i < 4; ++i) {
+        ad[n++] = static_cast<uint8_t>(origin >> (24 - 8 * i));
+    }
+    for (int i = 0; i < 4; ++i) {
+        ad[n++] = static_cast<uint8_t>(seq >> (24 - 8 * i));
+    }
+    memcpy(ad + n, body, bodyLen);
+    n += bodyLen;
+    startExtAdvWithData(ad, n);
 }
 
 // ---- config service ------------------------------------------------------
@@ -383,23 +401,9 @@ void BleTransport::beaconPeer(const uint8_t *body28, size_t len,
     if (!startNimble()) {
         return;
     }
-    // ICD §10.9: FF FF FF | 0x02 | origin BE | seq BE | §1 body — the
-    // leading type byte distinguishes it from a plain 28-byte v1 beacon.
-    uint8_t mfg[3 + 1 + 4 + 4 + 28];
-    size_t n = 0;
-    mfg[n++] = 0xFF;
-    mfg[n++] = 0xFF;
-    mfg[n++] = 0xFF;
-    mfg[n++] = 0x02;
-    for (int i = 0; i < 4; ++i) {
-        mfg[n++] = static_cast<uint8_t>(peerOrigin >> (24 - 8 * i));
-    }
-    for (int i = 0; i < 4; ++i) {
-        mfg[n++] = static_cast<uint8_t>(peerSeq >> (24 - 8 * i));
-    }
-    memcpy(mfg + n, body28, len);
-    n += len;
-    startBeaconAdvertisingMfg(mfg, n);
+    // ICD §10.9: [len][FF][FF][FF][0x02][origin BE][seq BE][§1 body] — the
+    // 0x02 marker distinguishes it from a plain 28-byte v1 beacon.
+    startPeerRelayAdvertising(body28, len, peerOrigin, peerSeq);
     const TickType_t wake = xTaskGetTickCount() + pdMS_TO_TICKS(durationMs);
     while (xTaskGetTickCount() < wake) {
         esp_task_wdt_reset();

@@ -55,6 +55,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _history = MutableStateFlow<List<PayloadHistoryEntry>>(emptyList())
     val history: StateFlow<List<PayloadHistoryEntry>> = _history
 
+    /** Trek peer contact state (ICD §10.9): the freshest relay per peer
+     *  origin — the Map tab's contact card derives in-touch/lost from
+     *  lastSeenMs freshness. Session-scoped: contact state is transient. */
+    data class PeerContact(
+        val originKey: String,        // %08X origin id
+        val seq: Long,                // the peer's frame counter
+        val payload: MiniLoRaPayload,
+        val rssi: Int,
+        val relayMac: String,         // the tracker that relayed it
+        val lastSeenMs: Long,         // phone wall-clock
+    )
+
+    private val _peerContacts =
+        MutableStateFlow<Map<String, PeerContact>>(emptyMap())
+    val peerContacts: StateFlow<Map<String, PeerContact>> = _peerContacts
+
     // ---- multi-tracker: identity filter + per-device display ----
     data class DeviceChip(val label: String, val key: String)  // key "" = All
 
@@ -76,8 +92,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val deviceChips: StateFlow<List<DeviceChip>> = _history.map { entries ->
         val labels = linkedMapOf<String, String>()   // label -> representative key
         entries.forEach { e ->
-            val label = DeviceConfig.deviceGroupMap[e.deviceKey]
-                ?.takeIf { it.isNotBlank() } ?: e.deviceKey
+            val label = displayNameOf(e.deviceKey).takeIf { it.isNotBlank() }
+                        ?: e.deviceKey
             if (label.isNotBlank()) labels.putIfAbsent(label, e.deviceKey)
         }
         buildList {
@@ -96,9 +112,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _diagDeviceKey.value = key
     }
 
-    private fun displayNameOf(deviceKey: String): String =
+    /** Display name for any identity: a group label from the server, a
+     *  friendly "Peer XXXXXXXX" for trek peer relays (§10.9), else the raw
+     *  key (BLE MAC / TTN id / push name). */
+    fun displayNameOf(deviceKey: String): String {
         DeviceConfig.deviceGroupMap[deviceKey]?.takeIf { it.isNotBlank() }
-            ?: deviceKey
+            ?.let { return it }
+        val hex = deviceKey.removePrefix("peer:")
+        if (hex.length == 8 && hex.all { it.isDigit() || it in 'A'..'F' })
+            return "Peer $hex"
+        return deviceKey
+    }
 
     private val _snack = MutableStateFlow<String?>(null)
     val snack: StateFlow<String?> = _snack
@@ -161,6 +185,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 hit.payload?.let {
                     addHistory(it, DataSourceFlags.BLE, hit.device.address)
                 }
+            }
+        }
+        // Trek peer relays (ICD §10.9): the peer's body is tagged under
+        // deviceKey = origin-hex so it draws as its own track, and the
+        // freshest relay per origin feeds the peer contact card.
+        viewModelScope.launch {
+            scanner.peerFrames.collect { hit ->
+                val peer = hit.peer ?: return@collect
+                _peerContacts.value = _peerContacts.value +
+                    mapOf(peer.deviceKey to PeerContact(
+                        originKey = peer.deviceKey,
+                        seq = peer.seq,
+                        payload = peer.payload,
+                        rssi = hit.device.rssi,
+                        relayMac = hit.device.address,
+                        lastSeenMs = System.currentTimeMillis(),
+                    ))
+                addHistory(peer.payload, DataSourceFlags.BLE, peer.deviceKey)
             }
         }
         // One-shot fetches at startup

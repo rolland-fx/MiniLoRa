@@ -120,6 +120,10 @@ object MiniLoRaCommands {
         "30 min", "60 min", "120 min",
     )
 
+    /** Same table in minutes — the trek contact-lost threshold derives
+     *  from it (3 missed exchange windows, ICD §10.8). */
+    val SLEEP_MINUTES = listOf(1, 2, 5, 10, 15, 20, 30, 60, 120)
+
     /** SET_RANGE frame: arg = the sleep-table index (same scale as the
      *  config envelope's cfgRange). Confirm rides the next telemetry
      *  frame's sleep-minutes byte. */
@@ -289,11 +293,75 @@ class MiniLoRaPayload(rawBytes: ByteArray) {
 const val MG_PER_COUNT = 4000.0 / 2048.0
 
 /**
+ * ICD §10.9 peer-relay advertisement (trek mode): the tracker relays its
+ * peer's last received §1 body over BLE so the phone can draw the peer's
+ * track. Manufacturer data (after the AD header):
+ *
+ *   FF FF FF | 0x02 | origin (4 B BE) | seq (4 B BE) | body (28 B, §1)
+ *
+ * The leading 0x02 type byte + the 40-byte length distinguish it from a
+ * plain 28-byte v1 beacon (which carries `FF FF + 28 B`).
+ */
+data class PeerRelayFrame(
+    val origin: Long,               // 32-bit origin id of the PEER
+    val seq: Long,                  // the peer's frame counter
+    val payload: MiniLoRaPayload,   // the peer's 28 B body
+) {
+    /** ICD §10.9: the body is tagged under deviceKey = origin-hex. */
+    val deviceKey: String get() = "%08X".format(origin)
+
+    companion object {
+        /**
+         * Manufacturer field after the [len][0xFF] header — 39 B:
+         *   FF FF | 0x02 | origin (4 B BE) | seq (4 B BE) | body (28 B)
+         * (the on-air stream is [len][0xFF][FF][FF][0x02]... — the first
+         * two FFs are the v1-parity company id, matching the own beacon).
+         */
+        const val MFG_SIZE = 2 + 1 + 4 + 4 + MiniLoRaPayload.PAYLOAD_SIZE
+
+        /** Parse the manufacturer-data field (AD type 0xFF body). */
+        fun fromMfg(mfg: ByteArray): PeerRelayFrame? {
+            if (mfg.size != MFG_SIZE) return null
+            if (mfg[0] != 0xFF.toByte() || mfg[1] != 0xFF.toByte() ||
+                mfg[2] != 0x02.toByte()) return null
+            var origin = 0L
+            var seq = 0L
+            for (i in 0 until 4) {
+                origin = (origin shl 8) or (mfg[3 + i].toLong() and 0xFF)
+                seq = (seq shl 8) or (mfg[7 + i].toLong() and 0xFF)
+            }
+            val body = mfg.copyOfRange(11, 11 + MiniLoRaPayload.PAYLOAD_SIZE)
+            return PeerRelayFrame(origin, seq, MiniLoRaPayload(body))
+        }
+    }
+}
+
+/**
  * Helper object for parsing MiniLoRa 28-byte payloads from BLE scan data.
  * Parses raw advertising data bytes to extract the payload from
  * Service Data (AD type 0x16, UUID 0xFEE0) or Manufacturer Specific Data (AD type 0xFF).
  */
 object MiniLoRaPayloadParser {
+
+    /** Peer-relay parse (§10.9) — try BEFORE fromBytes: a 40-byte mfg field
+     *  would otherwise be mis-sliced into garbage telemetry. */
+    fun peerFromBytes(data: ByteArray?): PeerRelayFrame? {
+        val mfg = data ?: return null
+        var offset = 0
+        while (offset < mfg.size) {
+            if (offset + 2 > mfg.size) break
+            val len = mfg[offset].toInt() and 0xFF
+            val type = mfg[offset + 1].toInt() and 0xFF
+            if (len <= 0 || offset + 1 + len > mfg.size) break
+            if (type == 0xFF) {
+                val field = mfg.copyOfRange(offset + 2, offset + len + 1)
+                return PeerRelayFrame.fromMfg(field)
+            }
+            offset += 1 + len
+        }
+        return null
+    }
+
 
     fun fromBytes(data: ByteArray?): MiniLoRaPayload? {
         if (data == null || data.isEmpty()) return null
@@ -344,6 +412,16 @@ object MiniLoRaPayloadParser {
             when (type) {
                 0xFF -> {
                     // Manufacturer Specific Data
+                    if (fieldData.size == PeerRelayFrame.MFG_SIZE &&
+                        fieldData[0] == 0xFF.toByte() &&
+                        fieldData[1] == 0xFF.toByte() &&
+                        fieldData[2] == 0x02.toByte()) {
+                        // Peer-relay adv (§10.9) — NOT a v1 beacon; returning
+                        // a slice of it here would fabricate telemetry.
+                        android.util.Log.d("MiniLoRa",
+                            "mfg ${fieldData.size}B is a peer relay — skipped")
+                        return null
+                    }
                     if (fieldData.size == 28) {
                         return fieldData.copyOf(28)
                     } else if (fieldData.size >= 30) {

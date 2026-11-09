@@ -13,11 +13,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -26,10 +30,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import co.minilora.app.ui.AppViewModel
+import co.minilora.app.ui.SectionCard
 import co.minilora.app.util.DeviceConfig
 import kotlinx.coroutines.launch
 
@@ -37,8 +43,10 @@ import kotlinx.coroutines.launch
 private val SLEEP_LABELS = MiniLoRaCommands.SLEEP_LABELS
 
 /**
- * Device configuration editor (ICD §4). Writes go through the CRC-protected
- * v3 envelope; "Read" shows the device's live status + current config first.
+ * Device setup (ICD §4). Sectioned cards — radio mode first (it decides
+ * what the device does), then the credentials each mode needs, sensors and
+ * power. Writes go through the CRC-protected v3/v5 envelope; "Read" pulls
+ * the device's live config into the editor first.
  */
 @Composable
 fun ConfigScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
@@ -228,197 +236,265 @@ fun ConfigScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        OutlinedTextField(globalName, { globalName = it },
-            label = { Text("Device name") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(wifiSSID, { wifiSSID = it },
-            label = { Text("WiFi SSID") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(wifiPassword, { wifiPassword = it },
-            label = { Text("WiFi password") }, modifier = Modifier.fillMaxWidth())
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(wifiIP, { wifiIP = it },
-                label = { Text("Server IP") }, modifier = Modifier.weight(2f))
-            OutlinedTextField(wifiPort, { wifiPort = it },
-                label = { Text("Port") }, modifier = Modifier.weight(1f))
-        }
-        OutlinedTextField(joinEUI, { joinEUI = it },
-            label = { Text("JoinEUI (hex)") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(devEUI, { devEUI = it },
-            label = { Text("DevEUI (hex)") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(appKey, { appKey = it },
-            label = { Text("AppKey (hex, 32)") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(nwkKey, { nwkKey = it },
-            label = { Text("NwkKey (hex, 32)") }, modifier = Modifier.fillMaxWidth())
+    Column(modifier.fillMaxSize()) {
+        // ---- scrollable sections ----
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())
+                   .padding(horizontal = 12.dp),
+               verticalArrangement = Arrangement.spacedBy(8.dp)) {
 
-        Text("Sensors & transports", style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(top = 6.dp))
-        listOf(
-            "LoRaWAN" to cfgLoRaWAN, "WiFi" to cfgWiFi, "GNSS" to cfgGNSS,
-            "BME280" to cfgBME280, "OPT3001" to cfgOPT30, "LIS3DH" to cfgLIS3DH,
-            "BLE beacon" to cfgBLE, "Zigbee" to cfgZigbee,
-        ).forEachIndexed { idx, (label, checked) ->
-            Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                val setter: (Boolean) -> Unit = when (idx) {
-                    0 -> { v -> cfgLoRaWAN = v }
-                    1 -> { v -> cfgWiFi = v }
-                    2 -> { v -> cfgGNSS = v }
-                    3 -> { v -> cfgBME280 = v }
-                    4 -> { v -> cfgOPT30 = v }
-                    5 -> { v -> cfgLIS3DH = v }
-                    6 -> { v -> cfgBLE = v }
-                    else -> { v -> cfgZigbee = v }
-                }
-                Checkbox(checked = checked, onCheckedChange = setter)
+            // ---- target device ----
+            val target = DeviceConfig.targetDeviceName
+            SectionCard("Target device",
+                "Select it on the Devices tab (it must be awake, advertising its config window)") {
+                Text(
+                    if (target.isBlank()) "None selected — open Devices and tap a tracker"
+                    else target,
+                    style = MaterialTheme.typography.bodyLarge)
             }
-        }
 
-        Text("Sleep duration: ${SLEEP_LABELS[cfgRange.toInt().coerceIn(0, 8)]}",
-            style = MaterialTheme.typography.bodyMedium)
-        Slider(
-            value = cfgRange,
-            onValueChange = { cfgRange = it },
-            valueRange = 0f..8f,
-            steps = 7,
-        )
-
-        Text("Asset mode (P5)", style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(top = 6.dp))
-        Row(Modifier.fillMaxWidth(),
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Text("Wake on motion (uses the accelerometer)",
-                Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-            Checkbox(checked = cfgAssetMode, onCheckedChange = { cfgAssetMode = it })
-        }
-        // ---- P2P star / trek (ICD §10) ----
-        Text("P2P (no TTN — LoRa raw; star needs a gateway, trek is 2 devices)",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            listOf("LoRaWAN", "P2P star", "Trek").forEachIndexed { i, label ->
-                OutlinedButton(onClick = { cfgLoRaMode = i },
-                    enabled = true) {
-                    Text(label, style = MaterialTheme.typography.labelSmall,
-                         color = if (cfgLoRaMode == i)
-                             MaterialTheme.colorScheme.primary
-                             else MaterialTheme.colorScheme.onSurface)
-                }
-            }
-        }
-        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Text("Gateway role (star only)", style = MaterialTheme.typography.bodyMedium)
-            Checkbox(checked = cfgP2PRole, onCheckedChange = { cfgP2PRole = it },
-                     enabled = cfgLoRaMode == 1)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            listOf("Long-range SF12", "Balanced SF10", "Bench SF7")
-                .forEachIndexed { i, label ->
-                    OutlinedButton(onClick = { cfgP2PProfile = i },
-                        enabled = cfgLoRaMode != 0) {
-                        Text(label, style = MaterialTheme.typography.labelSmall,
-                             color = if (cfgP2PProfile == i)
-                                 MaterialTheme.colorScheme.primary
-                                 else MaterialTheme.colorScheme.onSurface)
+            // ---- 1. radio mode (decides everything below) ----
+            SectionCard("Radio mode", "How this device talks") {
+                val modes = listOf(
+                    "LoRaWAN" to "Via TTN — the default cloud path",
+                    "P2P star" to "No cloud: this device TXes to a powered " +
+                        "gateway, which forwards to your server",
+                    "Trek" to "No cloud at all: two devices exchange " +
+                        "positions every wake — both phones show both tracks",
+                )
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    modes.forEachIndexed { i, (label, _) ->
+                        SegmentedButton(
+                            selected = cfgLoRaMode == i,
+                            onClick = { cfgLoRaMode = i },
+                            shape = SegmentedButtonDefaults.itemShape(
+                                index = i, count = modes.size),
+                        ) { Text(label, style = MaterialTheme.typography.labelSmall) }
                     }
                 }
-        }
-        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Text("Command window after each TX (recommended)",
-                Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-            Checkbox(checked = cfgP2PRxAfterTx,
-                     onCheckedChange = { cfgP2PRxAfterTx = it },
-                     enabled = cfgLoRaMode != 0)
-        }
-        OutlinedTextField(cfgP2PShortId, { cfgP2PShortId = it },
-            label = { Text("Short id hex (empty = from DevEUI)") },
-            enabled = cfgLoRaMode != 0, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(cfgMeshKey, { cfgMeshKey = it },
-            label = { Text("Mesh key — 32 hex chars (required for P2P)") },
-            enabled = cfgLoRaMode != 0, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(cfgP2PTxPower, { cfgP2PTxPower = it },
-            label = { Text("TX power dBm (0 = 14; up to 22 — legal on 869.525)") },
-            enabled = cfgLoRaMode != 0, modifier = Modifier.fillMaxWidth())
-        if (cfgAssetMode) {
-            Text("Motion sensitivity", style = MaterialTheme.typography.bodySmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                listOf("Low", "Med", "High").forEachIndexed { i, label ->
-                    val sens = i + 1
-                    OutlinedButton(onClick = { cfgMotionSens = sens },
-                        enabled = cfgMotionSens != sens,
-                        modifier = Modifier.weight(1f)) { Text(label) }
+                Text(modes[cfgLoRaMode.coerceIn(0, 2)].second,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (cfgLoRaMode != 0) {
+                    if (cfgLoRaMode == 1) {
+                        LabeledSwitch("Gateway role",
+                            "Powered gateway that forwards leaves' frames " +
+                                "to the server (leave unchecked = leaf)",
+                            cfgP2PRole) { cfgP2PRole = it }
+                    }
+                    Text("Air profile", style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf("Long-range SF12", "Balanced SF10", "Bench SF7")
+                            .forEachIndexed { i, label ->
+                                OutlinedButton(onClick = { cfgP2PProfile = i },
+                                    enabled = cfgP2PProfile != i,
+                                    modifier = Modifier.weight(1f)) {
+                                    Text(label,
+                                        style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                    }
+                    LabeledSwitch("Command window after each TX",
+                        "Listens briefly after every transmission (recommended)",
+                        cfgP2PRxAfterTx) { cfgP2PRxAfterTx = it }
+                    OutlinedTextField(cfgP2PShortId, { cfgP2PShortId = it },
+                        label = { Text("Short id hex (empty = from DevEUI)") },
+                        modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(cfgMeshKey, { cfgMeshKey = it },
+                        label = { Text("Mesh key — 32 hex chars (required)") },
+                        modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(cfgP2PTxPower, { cfgP2PTxPower = it },
+                        label = { Text("TX power dBm (0 = 14; up to 22 — legal on 869.525)") },
+                        modifier = Modifier.fillMaxWidth())
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedTextField(cfgAssetHeartbeatH, { cfgAssetHeartbeatH = it },
-                    label = { Text("Heartbeat (h)") }, modifier = Modifier.weight(1f))
-                OutlinedTextField(cfgBurstIntervalMin, { cfgBurstIntervalMin = it },
-                    label = { Text("Burst (min)") }, modifier = Modifier.weight(1f))
-                OutlinedTextField(cfgBurstMaxPerDay, { cfgBurstMaxPerDay = it },
-                    label = { Text("Bursts/day") }, modifier = Modifier.weight(1f))
-            }
-        }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(vertical = 8.dp)) {
-            OutlinedButton(
-                onClick = {
-                    persist()
-                    scope.launch {
-                        message = "Reading device…"
-                        val result = vm.readDeviceStatusAndConfig()
-                        message = if (result == null) "Read failed"
-                                  else "Read OK" + (result.first?.get("fwVersion")?.let { " (fw $it)" } ?: "")
-                        // Populate the editor from the device's current config
-                        result?.second?.let { cfg -> applyConfig(cfg) }
+            // ---- 2. LoRaWAN credentials (LoRaWAN mode only) ----
+            if (cfgLoRaMode == 0) {
+                SectionCard("LoRaWAN credentials",
+                    "From your TTN console (end device → keys)") {
+                    OutlinedTextField(joinEUI, { joinEUI = it },
+                        label = { Text("JoinEUI (hex)") },
+                        modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(devEUI, { devEUI = it },
+                        label = { Text("DevEUI (hex)") },
+                        modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(appKey, { appKey = it },
+                        label = { Text("AppKey (hex, 32)") },
+                        modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(nwkKey, { nwkKey = it },
+                        label = { Text("NwkKey (hex, 32)") },
+                        modifier = Modifier.fillMaxWidth())
+                }
+            }
+
+            // ---- 3. WiFi & server (used by push + OTA in every mode) ----
+            SectionCard("Wi-Fi & server",
+                "Credentials of the network the device joins, and the MiniLoRa " +
+                    "server that receives its data (also used for OTA updates)") {
+                OutlinedTextField(wifiSSID, { wifiSSID = it },
+                    label = { Text("Wi-Fi SSID") },
+                    modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(wifiPassword, { wifiPassword = it },
+                    label = { Text("Wi-Fi password") },
+                    modifier = Modifier.fillMaxWidth())
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedTextField(wifiIP, { wifiIP = it },
+                        label = { Text("Server IP") }, modifier = Modifier.weight(2f))
+                    OutlinedTextField(wifiPort, { wifiPort = it },
+                        label = { Text("Port") }, modifier = Modifier.weight(1f))
+                }
+            }
+
+            // ---- 4. sensors ----
+            SectionCard("Sensors & transports",
+                "What the device reads and broadcasts") {
+                val toggles = listOf(
+                    "GNSS (GPS)" to (cfgGNSS to { v: Boolean -> cfgGNSS = v }),
+                    "BME280 (temp/hum/pressure)" to (cfgBME280 to { v: Boolean -> cfgBME280 = v }),
+                    "OPT3001 (light)" to (cfgOPT30 to { v: Boolean -> cfgOPT30 = v }),
+                    "LIS3DH (accelerometer)" to (cfgLIS3DH to { v: Boolean -> cfgLIS3DH = v }),
+                    "BLE beacon" to (cfgBLE to { v: Boolean -> cfgBLE = v }),
+                    "Zigbee" to (cfgZigbee to { v: Boolean -> cfgZigbee = v }),
+                    "LoRaWAN uplink" to (cfgLoRaWAN to { v: Boolean -> cfgLoRaWAN = v }),
+                    "Wi-Fi push" to (cfgWiFi to { v: Boolean -> cfgWiFi = v }),
+                )
+                toggles.chunked(2).forEach { rowToggles ->
+                    Row(Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        rowToggles.forEach { (label, pair) ->
+                            val (checked, setter) = pair
+                            Row(Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Text(label,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.weight(1f, fill = false))
+                                Switch(checked = checked, onCheckedChange = setter)
+                            }
+                        }
                     }
-                },
-                enabled = !busy,
-            ) { Text("Read") }
-            Button(
-                onClick = {
-                    persist()
-                    scope.launch {
-                        message = "Writing (CRC-protected)…"
-                        vm.writeConfig(buildCurrentEnvelope())
-                        message = "Write sent"
+                }
+            }
+
+            // ---- 5. power & behavior ----
+            SectionCard("Power & behavior",
+                "How often the device wakes, and motion-triggered tracking") {
+                Text("Wake every ${SLEEP_LABELS[cfgRange.toInt().coerceIn(0, 8)]}",
+                    style = MaterialTheme.typography.bodyMedium)
+                Slider(
+                    value = cfgRange,
+                    onValueChange = { cfgRange = it },
+                    valueRange = 0f..8f,
+                    steps = 7,
+                )
+                LabeledSwitch("Asset mode (wake on motion)",
+                    "Uses the accelerometer — for packed/carryable assets",
+                    cfgAssetMode) { cfgAssetMode = it }
+                if (cfgAssetMode) {
+                    Text("Motion sensitivity", style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf("Low", "Med", "High").forEachIndexed { i, label ->
+                            val sens = i + 1
+                            OutlinedButton(onClick = { cfgMotionSens = sens },
+                                enabled = cfgMotionSens != sens,
+                                modifier = Modifier.weight(1f)) { Text(label) }
+                        }
                     }
-                },
-                enabled = !busy,
-            ) { Text("Write to device") }
-        }
-        // ---- config file export / import ----
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = {
-                    exportLauncher.launch(
-                        "minilora-" +
-                            globalName.trim().ifBlank { "device" } + ".cfg")
-                },
-                enabled = !busy,
-            ) { Text("Export .cfg") }
-            OutlinedButton(
-                onClick = { importLauncher.launch(arrayOf("*/*")) },
-                enabled = !busy,
-            ) { Text("Import .cfg") }
-        }
-        if (message.isNotEmpty()) {
-            Text(message, style = MaterialTheme.typography.bodySmall,
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedTextField(cfgAssetHeartbeatH, { cfgAssetHeartbeatH = it },
+                            label = { Text("Heartbeat (h)") }, modifier = Modifier.weight(1f))
+                        OutlinedTextField(cfgBurstIntervalMin, { cfgBurstIntervalMin = it },
+                            label = { Text("Burst (min)") }, modifier = Modifier.weight(1f))
+                        OutlinedTextField(cfgBurstMaxPerDay, { cfgBurstMaxPerDay = it },
+                            label = { Text("Bursts/day") }, modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+
+            if (message.isNotEmpty()) {
+                Text(message, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            status?.let {
+                Text(
+                    "Device: bat ${it["batMv"]} mV · boots ${it["bootCount"]} · " +
+                        "gpsFails ${it["gpsConsecFails"]} · joined=${it["joined"]}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text("Changes apply after the device's next wake cycle.",
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        status?.let {
-            Text(
-                "Device: bat ${it["batMv"]} mV · boots ${it["bootCount"]} · " +
-                    "gpsFails ${it["gpsConsecFails"]} · joined=${it["joined"]}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+
+        // ---- sticky action bar ----
+        Surface(tonalElevation = 3.dp) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                   verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            persist()
+                            scope.launch {
+                                message = "Reading device…"
+                                val result = vm.readDeviceStatusAndConfig()
+                                message = if (result == null) "Read failed"
+                                          else "Read OK" + (result.first?.get("fwVersion")
+                                              ?.let { " (fw $it)" } ?: "")
+                                // Populate the editor from the device's current config
+                                result?.second?.let { cfg -> applyConfig(cfg) }
+                            }
+                        },
+                        enabled = !busy,
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Read from device") }
+                    Button(
+                        onClick = {
+                            persist()
+                            scope.launch {
+                                message = "Writing (CRC-protected)…"
+                                vm.writeConfig(buildCurrentEnvelope())
+                                message = "Write sent"
+                            }
+                        },
+                        enabled = !busy,
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Write to device") }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            exportLauncher.launch(
+                                "minilora-" +
+                                    globalName.trim().ifBlank { "device" } + ".cfg")
+                        },
+                        enabled = !busy,
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Export .cfg") }
+                    OutlinedButton(
+                        onClick = { importLauncher.launch(arrayOf("*/*")) },
+                        enabled = !busy,
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Import .cfg") }
+                }
+            }
         }
+    }
+}
+
+/** Label + switch row with an explainer under the label. */
+@Composable
+private fun LabeledSwitch(label: String, subtitle: String? = null,
+                          checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+            if (subtitle != null) {
+                Text(subtitle, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Switch(checked = checked, onCheckedChange = onChange)
     }
 }
 

@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import co.minilora.app.ui.AppViewModel
+import co.minilora.app.ui.SectionCard
 import co.minilora.app.util.DeviceConfig
 import kotlinx.coroutines.launch
 
@@ -131,71 +132,68 @@ fun SettingsScreen(vm: AppViewModel, onDone: () -> Unit, modifier: Modifier = Mo
             .padding(horizontal = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text("Polling", style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 8.dp))
-        Text("How this phone talks to the tracker. Remembered across restarts.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Text("TTN polling", style = MaterialTheme.typography.bodyLarge)
-            Switch(checked = vm.ttnPolling.collectAsState().value,
-                   onCheckedChange = { vm.toggleTTNPolling() })
+        SectionCard("Polling",
+            "How this phone talks to the tracker. Remembered across restarts.") {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text("TTN polling", style = MaterialTheme.typography.bodyLarge)
+                Switch(checked = vm.ttnPolling.collectAsState().value,
+                       onCheckedChange = { vm.toggleTTNPolling() })
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text("WiFi server polling", style = MaterialTheme.typography.bodyLarge)
+                Switch(checked = vm.wifiPolling.collectAsState().value,
+                       onCheckedChange = { vm.toggleWiFiPolling() })
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text("BLE polling", style = MaterialTheme.typography.bodyLarge)
+                Switch(checked = vm.blePolling.collectAsState().value,
+                       onCheckedChange = { vm.toggleBLEPolling() })
+            }
+            Text("BLE beacon reception runs whenever the app is open " +
+                 "(battery-balanced scan, paused in background). Every " +
+                 "MiniLoRa beacon in range is received — no interval to configure.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Text("WiFi server polling", style = MaterialTheme.typography.bodyLarge)
-            Switch(checked = vm.wifiPolling.collectAsState().value,
-                   onCheckedChange = { vm.toggleWiFiPolling() })
+
+        SectionCard("The Things Network", null) {
+            OutlinedTextField(ttnApiKey, { ttnApiKey = it },
+                label = { Text("API key (NNSXS…)") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(ttnAppId, { ttnAppId = it },
+                label = { Text("Application ID") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(ttnDeviceId, { ttnDeviceId = it },
+                label = { Text("Device ID") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(ttnExtraIds, { ttnExtraIds = it },
+                label = { Text("Extra device IDs (comma-separated)") },
+                supportingText = { Text("Additional trackers to poll over TTN — they appear as their own filter chips") },
+                modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(ttnRegion, { ttnRegion = it },
+                label = { Text("Region (eu1, nam1, …)") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(ttnInterval, { ttnInterval = it },
+                label = { Text("Poll interval (seconds)") }, modifier = Modifier.fillMaxWidth())
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Text("BLE polling", style = MaterialTheme.typography.bodyLarge)
-            Switch(checked = vm.blePolling.collectAsState().value,
-                   onCheckedChange = { vm.toggleBLEPolling() })
+
+        SectionCard("Local WiFi server", null) {
+            OutlinedTextField(wifiServer, { wifiServer = it },
+                label = { Text("Server IP") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(wifiPort, { wifiPort = it },
+                label = { Text("Server port (default 5000)") },
+                modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(wifiInterval, { wifiInterval = it },
+                label = { Text("Poll interval (seconds)") }, modifier = Modifier.fillMaxWidth())
         }
 
-        Text("The Things Network", style = MaterialTheme.typography.titleMedium)
-        OutlinedTextField(ttnApiKey, { ttnApiKey = it },
-            label = { Text("API key (NNSXS…)") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(ttnAppId, { ttnAppId = it },
-            label = { Text("Application ID") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(ttnDeviceId, { ttnDeviceId = it },
-            label = { Text("Device ID") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(ttnExtraIds, { ttnExtraIds = it },
-            label = { Text("Extra device IDs (comma-separated)") },
-            supportingText = { Text("Additional trackers to poll over TTN — they appear as their own filter chips") },
-            modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(ttnRegion, { ttnRegion = it },
-            label = { Text("Region (eu1, nam1, …)") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(ttnInterval, { ttnInterval = it },
-            label = { Text("Poll interval (seconds)") }, modifier = Modifier.fillMaxWidth())
-
-        Text("Local WiFi server", style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 8.dp))
-        OutlinedTextField(wifiServer, { wifiServer = it },
-            label = { Text("Server IP") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(wifiPort, { wifiPort = it },
-            label = { Text("Server port (default 5000)") },
-            modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(wifiInterval, { wifiInterval = it },
-            label = { Text("Poll interval (seconds)") }, modifier = Modifier.fillMaxWidth())
-
-        Text("BLE beacon reception", style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 8.dp))
-        Text("Runs whenever the app is open (battery-balanced scan, " +
-             "paused in background). Every MiniLoRa beacon in range is " +
-             "received — no interval to configure.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-        Text("Target device", style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 8.dp))
-        OutlinedTextField(targetName, { targetName = it },
-            label = { Text("Name filter (BLE scan)") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(targetMac, { targetMac = it },
-            label = { Text("MAC address (config/status target)") },
-            modifier = Modifier.fillMaxWidth())
+        SectionCard("Target device",
+            "Which tracker the app talks to over BLE (config, status) and filters by name.") {
+            OutlinedTextField(targetName, { targetName = it },
+                label = { Text("Name filter (BLE scan)") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(targetMac, { targetMac = it },
+                label = { Text("MAC address (config/status target)") },
+                modifier = Modifier.fillMaxWidth())
+        }
 
         Row(modifier = Modifier.padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -221,7 +219,7 @@ fun SettingsScreen(vm: AppViewModel, onDone: () -> Unit, modifier: Modifier = Mo
         }
         Text("The settings file contains the TTN API key in clear text — " +
             "treat it like a credential. Device BLE fields travel separately " +
-            "in the Config tab (.cfg).",
+            "in the Setup tab (.cfg).",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
     }

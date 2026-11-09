@@ -2,6 +2,9 @@
 
 #include "Config.hpp" // crc16Ccitt — the ICD-wide checksum
 
+#include <esp_log.h>
+#include <nvs.h>
+
 #include <mbedtls/aes.h>
 #include <cstring>
 
@@ -10,9 +13,10 @@ namespace p2p {
 
 namespace {
 
-// AES-128-CTR with the ICD §10.3 IV: origin(BE) || seq(BE) || 8×0x00.
+// AES-128-CTR with the ICD §10.3 IV: origin(BE) || seq(BE) || boot(BE) ||
+// 6×0x00. The boot term makes the keystream unique per power cycle.
 void ctrCrypt(const uint8_t key[kKeyLen], uint32_t originId, uint32_t seq,
-              const uint8_t *in, uint8_t *out, size_t len)
+              uint16_t boot, const uint8_t *in, uint8_t *out, size_t len)
 {
     mbedtls_aes_context aes;
     mbedtls_aes_init(&aes);
@@ -23,6 +27,8 @@ void ctrCrypt(const uint8_t key[kKeyLen], uint32_t originId, uint32_t seq,
         iv[i] = static_cast<uint8_t>(originId >> (24 - 8 * i));
         iv[4 + i] = static_cast<uint8_t>(seq >> (24 - 8 * i));
     }
+    iv[8] = static_cast<uint8_t>(boot >> 8);
+    iv[9] = static_cast<uint8_t>(boot & 0xFF);
     uint8_t streamBlock[16] = {0};
     size_t offset = 0;
     if (len > 0) {
@@ -99,7 +105,7 @@ void cmac(const uint8_t key[kKeyLen], const uint8_t *data, size_t len,
 } // namespace
 
 size_t buildFrame(uint8_t type, uint32_t originId, uint32_t seq,
-                  const uint8_t *body, size_t bodyLen,
+                  uint16_t boot, const uint8_t *body, size_t bodyLen,
                   const uint8_t key[kKeyLen], uint8_t *out)
 {
     if (!body || bodyLen == 0 || bodyLen > kMaxBody) {
@@ -117,9 +123,11 @@ size_t buildFrame(uint8_t type, uint32_t originId, uint32_t seq,
         out[6 + i] = static_cast<uint8_t>(seq >> (24 - 8 * i));
     }
     out[10] = 0; // hops — star topology
-    out[11] = static_cast<uint8_t>(bodyLen);
+    out[11] = static_cast<uint8_t>(boot >> 8);
+    out[12] = static_cast<uint8_t>(boot & 0xFF);
+    out[13] = static_cast<uint8_t>(bodyLen);
 
-    ctrCrypt(key, originId, seq, body, out + kHeaderLen, bodyLen);
+    ctrCrypt(key, originId, seq, boot, body, out + kHeaderLen, bodyLen);
 
     cmac(key, out, kHeaderLen + bodyLen, out + kHeaderLen + bodyLen);
 
@@ -154,7 +162,8 @@ size_t parseFrame(const uint8_t *in, size_t len, const uint8_t key[kKeyLen],
                         static_cast<uint32_t>(in[7]) << 16 |
                         static_cast<uint32_t>(in[8]) << 8 |
                         static_cast<uint32_t>(in[9]);
-    const size_t bodyLen = in[11];
+    const uint16_t boot = static_cast<uint16_t>(in[11]) << 8 | in[12];
+    const size_t bodyLen = in[13];
     if (kHeaderLen + bodyLen + kMicLen + kCrcLen != len ||
         bodyLen > maxBody) {
         return 0;
@@ -172,7 +181,7 @@ size_t parseFrame(const uint8_t *in, size_t len, const uint8_t key[kKeyLen],
         return 0;
     }
 
-    ctrCrypt(key, origin, sq, in + kHeaderLen, body, bodyLen);
+    ctrCrypt(key, origin, sq, boot, in + kHeaderLen, body, bodyLen);
     if (type) {
         *type = t;
     }
@@ -183,6 +192,37 @@ size_t parseFrame(const uint8_t *in, size_t len, const uint8_t key[kKeyLen],
         *seq = sq;
     }
     return bodyLen;
+}
+
+uint16_t bootCount()
+{
+    // RTC cache: valid across deep sleep, invalidated by a real power
+    // cycle (the magic dies with the RTC domain). Only a power cycle
+    // increments the NVS counter — one flash write per battery swap.
+    constexpr uint32_t kMagic = 0x424F4F54; // "BOOT"
+    static RTC_DATA_ATTR uint32_t magic = 0;
+    static RTC_DATA_ATTR uint16_t cache = 0;
+    if (magic == kMagic) {
+        return cache;
+    }
+    uint16_t boot = 0;
+    nvs_handle_t h;
+    if (nvs_open("minilora", NVS_READONLY, &h) == ESP_OK) {
+        uint32_t stored = 0;
+        if (nvs_get_u32(h, "p2p_boot", &stored) == ESP_OK) {
+            boot = static_cast<uint16_t>(stored & 0xFFFF);
+        }
+        nvs_close(h);
+    }
+    boot = static_cast<uint16_t>((boot + 1) & 0xFFFF);
+    if (nvs_open("minilora", NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_u32(h, "p2p_boot", boot);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+    magic = kMagic;
+    cache = boot;
+    return boot;
 }
 
 } // namespace p2p

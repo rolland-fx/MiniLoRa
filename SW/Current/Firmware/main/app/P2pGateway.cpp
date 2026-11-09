@@ -162,7 +162,8 @@ void sendOwnFrame(const Context &ctx)
 {
     uint8_t frame[p2p::kMaxBody + p2p::kOverhead];
     const size_t n = p2p::buildFrame(p2p::kTypeTelemetry, originId(),
-                                     ++ownSeq, ctx.ownPayload, ctx.ownLen,
+                                     ++ownSeq, p2p::bootCount(),
+                                     ctx.ownPayload, ctx.ownLen,
                                      g_cfg->cfgMeshKey, frame);
     if (n == 0) {
         return;

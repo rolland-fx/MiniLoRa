@@ -1017,8 +1017,8 @@ void runCycle(bool recovery)
             const uint32_t origin = p2pOriginId();
             uint8_t frame[kPayloadSize + p2p::kOverhead];
             const size_t fn = p2p::buildFrame(
-                p2p::kTypeTelemetry, origin, g_p2pSeq++, payload,
-                kPayloadSize, g_cfg.cfgMeshKey, frame);
+                p2p::kTypeTelemetry, origin, g_p2pSeq++, p2p::bootCount(),
+                payload, kPayloadSize, g_cfg.cfgMeshKey, frame);
             if (fn > 0) {
                 // Land on the slot: wait (bounded) when the next hash slot
                 // is near; TX immediately when the wake drifted past it.
@@ -1070,8 +1070,9 @@ void runCycle(bool recovery)
                     encodeDiagnostics(diag, diagPayload);
                     uint8_t dframe[kDiagPayloadSize + p2p::kOverhead];
                     const size_t dn = p2p::buildFrame(
-                        p2p::kTypeDiag, origin, g_p2pSeq++, diagPayload,
-                        kDiagPayloadSize, g_cfg.cfgMeshKey, dframe);
+                        p2p::kTypeDiag, origin, g_p2pSeq++, p2p::bootCount(),
+                        diagPayload, kDiagPayloadSize, g_cfg.cfgMeshKey,
+                        dframe);
                     if (dn > 0 && radio.channelFree()) {
                         radio.send(dframe, dn);
                     }

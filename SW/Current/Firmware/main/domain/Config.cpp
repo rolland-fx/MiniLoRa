@@ -50,11 +50,21 @@ void makeDefaults(const ConfigDefaults &d, DeviceConfig &cfg)
     cfg.cfgAssetHeartbeatH = d.cfgAssetHeartbeatH;   // 0 = runtime default 24
     cfg.cfgBurstIntervalMin = d.cfgBurstIntervalMin; // 0 = runtime default 5
     cfg.cfgBurstMaxPerDay = d.cfgBurstMaxPerDay;     // 0 = runtime default 20
+    // P2P (§10): LoRaWAN stays the factory default; a zeroed mesh key
+    // keeps the P2P radio silent even with lora_mode = p2p.
+    cfg.cfgLoRaMode = flag(d.cfgP2P);
+    cfg.cfgP2PRole = flag(d.cfgP2PGateway);
+    cfg.cfgP2PProfile = d.cfgP2PProfile > 2 ? uint8_t{0} : d.cfgP2PProfile;
+    cfg.cfgP2PRxAfterTx = flag(d.cfgP2PRxAfterTx);
+    cfg.cfgP2PShortId = d.cfgP2PShortId;
+    if (d.meshKey) {
+        std::memcpy(cfg.cfgMeshKey, d.meshKey, sizeof(cfg.cfgMeshKey));
+    }
 }
 
 size_t serializeConfig(const DeviceConfig &cfg, uint8_t *out)
 {
-    out[0] = 3; // NVS schema 3 = v4 struct (asset fields included)
+    out[0] = 5; // NVS schema 5 = v5 struct (P2P fields included)
     std::memcpy(out + 1, &cfg, kConfigSize);
     const uint16_t crc = crc16Ccitt(out + 1, kConfigSize);
     out[kConfigSize + 1] = static_cast<uint8_t>(crc & 0xFF);
@@ -67,16 +77,22 @@ bool deserializeConfig(const uint8_t *in, size_t len, DeviceConfig &cfg)
     std::memset(&cfg, 0, sizeof(cfg));
     // NVS load path is CRC-protected like the BLE write path (ICD §4): a
     // corrupted or foreign-layout blob (e.g. a v1 struct left in NVS) must
-    // fall back to defaults, never parse as garbage flags.
-    if (len != kConfigSize + 3 || in[0] != 3) {
+    // fall back to defaults, never parse as garbage flags. Schema 3 blobs
+    // (pre-P2P) load with the P2P tail zeroed — LoRaWAN default preserved.
+    size_t bodyLen = 0;
+    if (len == kConfigBodyV4Size + 3 && in[0] == 3) {
+        bodyLen = kConfigBodyV4Size;
+    } else if (len == kConfigSize + 3 && in[0] == 5) {
+        bodyLen = kConfigSize;
+    } else {
         return false;
     }
-    const uint16_t crc = static_cast<uint16_t>(in[kConfigSize + 1]) |
-                         static_cast<uint16_t>(in[kConfigSize + 2]) << 8;
-    if (crc != crc16Ccitt(in + 1, kConfigSize)) {
+    const uint16_t crc = static_cast<uint16_t>(in[bodyLen + 1]) |
+                         static_cast<uint16_t>(in[bodyLen + 2]) << 8;
+    if (crc != crc16Ccitt(in + 1, bodyLen)) {
         return false;
     }
-    std::memcpy(&cfg, in + 1, kConfigSize);
+    std::memcpy(&cfg, in + 1, bodyLen); // old schemas: P2P tail stays zero
     return true;
 }
 
@@ -97,12 +113,15 @@ bool parseConfigWrite(const uint8_t *in, size_t len, DeviceConfig &cfg)
 {
     // ICD §4: CRC-protected envelopes are the only accepted writes.
     //   schema 3 = 159-byte body (asset fields default)
-    //   schema 4 = 164-byte body (asset config)  — current
+    //   schema 4 = 164-byte body (asset config)
+    //   schema 5 = 188-byte body (P2P config)   — current
     DeviceConfig parsed{};
     size_t bodyLen = 0;
     if (len == kConfigWriteV3Size && in[1] == 3) {
         bodyLen = kConfigBodyV3Size;
     } else if (len == kConfigWriteV4Size && in[1] == 4) {
+        bodyLen = kConfigBodyV4Size;
+    } else if (len == kConfigWriteV5Size && in[1] == 5) {
         bodyLen = kConfigSize;
     } else {
         return false;

@@ -1,10 +1,14 @@
-"""Device .cfg envelope builder (ICD §4, schema 4).
+"""Device .cfg envelope builder (ICD §4, schemas 4 and 5).
 
-Builds the exact 168-byte CRC-protected envelope the Android app writes
-over BLE GATT ('C' | 4 | 164-byte body | CRC16-CCITT LE) and the firmware
-stores in NVS (schema byte 3 + struct + CRC — the NVS blob wraps the SAME
-164-byte body). A .cfg generated here is byte-compatible with the app's
-"Import .cfg" feature: import → review → Write to device.
+Builds the CRC-protected envelope the Android app writes over BLE GATT
+('C' | schema | body | CRC16-CCITT LE) and the firmware stores in NVS
+(schema byte + struct + CRC — the NVS blob wraps the SAME body). A .cfg
+generated here is byte-compatible with the app's "Import .cfg" feature:
+import → review → Write to device.
+
+Schema 4 (168 B) is emitted unless P2P fields are requested — old apps
+and old flows are untouched. Schema 5 (192 B, ICD §10) adds the P2P star
+fields; the app needs schema-5 support to import those.
 
 Field layout (must stay in lockstep with the app's
 BLEDeviceConfigurator.buildBody() and the firmware's DeviceConfig):
@@ -27,11 +31,20 @@ BLEDeviceConfigurator.buildBody() and the firmware's DeviceConfig):
   161      cfgAssetHeartbeatH (0 = runtime default 24)
   162      cfgBurstIntervalMin (0 = runtime default 5)
   163      cfgBurstMaxPerDay (0 = runtime default 20)
+  --- schema 5 only (ICD §10) ---
+  164      cfgLoRaMode (0 = LoRaWAN, 1 = P2P star)
+  165      cfgP2PRole (0 = leaf, 1 = gateway)
+  166      cfgP2PProfile (0 = long-range SF12, 1 = SF10, 2 = SF7)
+  167      cfgP2PRxAfterTx (0/1)
+  168..171 cfgP2PShortId (u32 BE, 0 = derive from DevEUI)
+  172..187 cfgMeshKey (16 B; all-zero = P2P disabled)
 """
 import struct
 
 BODY_V4 = 164
 ENVELOPE_V4 = BODY_V4 + 4  # magic + version + body + CRC16
+BODY_V5 = 188
+ENVELOPE_V5 = BODY_V5 + 4
 
 #: kSleepTableMs index -> minutes (Telemetry.hpp; payload byte 26 semantics)
 SLEEP_MINUTES = [1, 2, 5, 10, 15, 20, 30, 60, 120]
@@ -55,8 +68,16 @@ def build_envelope(*, name: str, ssid: str, password: str, ip: str,
                    cfg_ble: bool, cfg_zigbee: bool, cfg_range: int,
                    cfg_asset_mode: bool, cfg_motion_sens: int,
                    cfg_asset_heartbeat_h: int, cfg_burst_interval_min: int,
-                   cfg_burst_max_per_day: int) -> bytes:
-    body = bytearray(BODY_V4)
+                   cfg_burst_max_per_day: int,
+                   # P2P star (ICD §10) — schema 5 is emitted only when
+                   # any of these deviates from the LoRaWAN defaults
+                   cfg_p2p: bool = False, cfg_p2p_role: bool = False,
+                   cfg_p2p_profile: int = 0, cfg_p2p_rx_after_tx: bool = True,
+                   cfg_p2p_short_id: int = 0,
+                   cfg_mesh_key: bytes = b"") -> bytes:
+    p2p_wanted = (cfg_p2p or cfg_p2p_role or cfg_p2p_profile or
+                  cfg_p2p_short_id or len(cfg_mesh_key) == 16)
+    body = bytearray(BODY_V5 if p2p_wanted else BODY_V4)
 
     def put_str(off: int, s: str) -> None:
         b = s.encode()[:32]
@@ -82,5 +103,17 @@ def build_envelope(*, name: str, ssid: str, password: str, ip: str,
     body[162] = cfg_burst_interval_min
     body[163] = cfg_burst_max_per_day
 
+    if not p2p_wanted:
+        crc = crc16_ccitt(body)
+        return b"C" + b"\x04" + bytes(body) + struct.pack("<H", crc)
+
+    body[164] = 1 if cfg_p2p else 0
+    body[165] = 1 if cfg_p2p_role else 0
+    body[166] = cfg_p2p_profile if 0 <= cfg_p2p_profile <= 2 else 0
+    body[167] = 1 if cfg_p2p_rx_after_tx else 0
+    body[168:172] = struct.pack(">I", cfg_p2p_short_id)
+    if len(cfg_mesh_key) == 16:
+        body[172:188] = cfg_mesh_key
+
     crc = crc16_ccitt(body)
-    return b"C" + b"\x04" + bytes(body) + struct.pack("<H", crc)
+    return b"C" + b"\x05" + bytes(body) + struct.pack("<H", crc)

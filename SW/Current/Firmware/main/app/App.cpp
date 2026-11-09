@@ -34,7 +34,11 @@
 #include "../transports/ble/BleTransport.hpp"
 #include "../transports/lorawan/LoRaWanTransport.hpp"
 #include "../transports/wifi/WifiTransport.hpp"
+#include "../transports/p2p/P2pRadio.hpp"
+#include "../domain/P2pFrame.hpp"
+#include "../domain/P2pSchedule.hpp"
 #include "../transports/zigbee/ZigbeeTransport.hpp"
+#include "P2pGateway.hpp"
 
 namespace minilora {
 
@@ -53,6 +57,10 @@ constexpr uint32_t kBeaconDurationMs = 2'500;
 constexpr uint32_t kWifiTimeoutMs = 10'000;
 
 RTC_DATA_ATTR int16_t g_prevAcc[3] = {0}; // last cycle accel (motion delta)
+// P2P frame counter (ICD §10.3) — per-origin, persists across deep sleep;
+// a power cycle resets it, which the server reads as a counter reset (the
+// insights module treats resets as new spans, never as loss bursts).
+RTC_DATA_ATTR uint32_t g_p2pSeq = 0;
 
 // Remote-command flags (fport 3): set mid-cycle by a downlink, consumed on
 // the NEXT cycle (RTC-persistent, so they survive the deep sleep between).
@@ -112,6 +120,35 @@ DeviceConfig g_cfg{};
 void feed() { feedWatchdog(); }
 
 bool flagOn(uint8_t f) { return f != 0; }
+
+// ---- P2P star mode (ICD §10) ------------------------------------------
+// cfgLoRaMode selects the air interface; a zeroed mesh key keeps the P2P
+// radio silent regardless (no key → no P2P, LoRaWAN flags untouched).
+static bool p2pKeyPresent()
+{
+    static const uint8_t kZero[16] = {0};
+    return std::memcmp(g_cfg.cfgMeshKey, kZero, sizeof(kZero)) != 0;
+}
+static bool p2pLeafMode()
+{
+    return flagOn(g_cfg.cfgLoRaMode) && !flagOn(g_cfg.cfgP2PRole) &&
+           p2pKeyPresent();
+}
+static bool p2pGatewayMode()
+{
+    return flagOn(g_cfg.cfgLoRaMode) && flagOn(g_cfg.cfgP2PRole) &&
+           p2pKeyPresent();
+}
+static uint32_t p2pOriginId()
+{
+    return g_cfg.cfgP2PShortId
+               ? g_cfg.cfgP2PShortId
+               : static_cast<uint32_t>(g_cfg.devEUI & 0xFFFFFFFFu);
+}
+static uint64_t rtcNowMs()
+{
+    return static_cast<uint64_t>(rtcNowSec()) * 1000;
+}
 
 bool longPressDetected()
 {
@@ -577,6 +614,10 @@ void runCycle(bool recovery)
         .cfgBME280 = true, .cfgOPT30 = true, .cfgLIS3DH = true,
         .cfgBLE = true, .cfgZigbee = false,
         .cfgRange = 4,
+        // P2P star (§10): factory default is LoRaWAN/leaf; a provisioned
+        // mesh key via the config envelope switches the radio over.
+        .cfgP2P = false, .cfgP2PGateway = false, .cfgP2PProfile = 0,
+        .cfgP2PRxAfterTx = true, .cfgP2PShortId = 0, .meshKey = nullptr,
     };
     ConfigStore::initAndLoad(g_cfg, defaults);
     // Bench diagnostic: what config is the cycle actually running? (answers
@@ -920,9 +961,10 @@ void runCycle(bool recovery)
         feed();
     }
 
-    // ---- phase: LoRaWAN ----
+    // ---- phase: LoRaWAN (skipped in P2P mode — one air interface) ----
     bool loraSent = false;
-    if (flagOn(g_cfg.cfgLoRaWAN) && g_cfg.devEUI != 0) {
+    if (!p2pLeafMode() && !p2pGatewayMode() &&
+        flagOn(g_cfg.cfgLoRaWAN) && g_cfg.devEUI != 0) {
         LoRaWanTransport lora;
         LoRaWanTransport::Downlink dl;
         if (lora.begin(g_cfg.joinEUI, g_cfg.devEUI, g_cfg.nwkKey, g_cfg.appKey)) {
@@ -961,6 +1003,82 @@ void runCycle(bool recovery)
             ++diag.loraJoinFailures;
         }
         lora.shutdown();
+        feed();
+    }
+
+    // ---- phase: P2P leaf (ICD §10) — TX in the hash-assigned data slot,
+    // then the 2 s command window; diag rides the same cadence as LoRaWAN.
+    // Off-grid wakeups (drift) TX immediately — the catch slots + the
+    // history drip absorb the loss, and each GPS fix re-tightens the slot.
+    if (p2pLeafMode()) {
+        P2pRadio radio;
+        const auto profile = static_cast<p2p::AirProfile>(g_cfg.cfgP2PProfile);
+        if (radio.begin(profile)) {
+            const uint32_t origin = p2pOriginId();
+            uint8_t frame[kPayloadSize + p2p::kOverhead];
+            const size_t fn = p2p::buildFrame(
+                p2p::kTypeTelemetry, origin, g_p2pSeq++, payload,
+                kPayloadSize, g_cfg.cfgMeshKey, frame);
+            if (fn > 0) {
+                // Land on the slot: wait (bounded) when the next hash slot
+                // is near; TX immediately when the wake drifted past it.
+                const uint64_t nowMs = rtcNowMs();
+                const uint64_t slotMs = p2p::nextDataSlotMs(
+                    origin, profile, nowMs + 100);
+                if (slotMs > nowMs && slotMs - nowMs <= 55'000) {
+                    vTaskDelay(pdMS_TO_TICKS(slotMs - nowMs));
+                }
+                if (radio.channelFree() && radio.send(frame, fn)) {
+                    loraSent = true;
+                }
+                feed();
+                // Command window: the gateway answers right after the
+                // leaf's frame (same 3-byte §3 body inside a P2P wrapper).
+                if (flagOn(g_cfg.cfgP2PRxAfterTx) && loraSent) {
+                    uint8_t rxBuf[p2p::kMaxBody + p2p::kOverhead];
+                    uint8_t rtype;
+                    uint32_t rOrigin, rSeq;
+                    const int got = radio.receive(
+                        rxBuf, sizeof(rxBuf), 2000, nullptr, nullptr);
+                    if (got > 0) {
+                        uint8_t body[p2p::kMaxBody];
+                        const size_t bl = p2p::parseFrame(
+                            rxBuf, static_cast<size_t>(got),
+                            g_cfg.cfgMeshKey, &rtype, &rOrigin, &rSeq, body,
+                            sizeof(body));
+                        if (bl == 3 && rtype == p2p::kTypeCommand &&
+                            body[0] == kDlMagic) {
+                            LoRaWanTransport::Downlink dl;
+                            dl.cmd = body[1];
+                            dl.cmdArg = body[2];
+                            applyDownlink(dl, diag);
+                        }
+                    }
+                    feed();
+                }
+                // Diagnostics over P2P: same cadence as the LoRaWAN diag.
+                if (g_sendDiag || diag.bootCount % kDiagSendEveryCycles == 0) {
+                    g_sendDiag = false;
+                    uint8_t diagPayload[kDiagPayloadSize];
+                    unsigned mj = 0, mn = 0, pt = 0;
+                    sscanf(CONFIG_MINILORA_FW_VERSION, "%u.%u.%u", &mj, &mn,
+                           &pt);
+                    diag.fwMajor = mj;
+                    diag.fwMinor = mn;
+                    diag.fwPatch = pt;
+                    stampConfigFlags(diag);
+                    encodeDiagnostics(diag, diagPayload);
+                    uint8_t dframe[kDiagPayloadSize + p2p::kOverhead];
+                    const size_t dn = p2p::buildFrame(
+                        p2p::kTypeDiag, origin, g_p2pSeq++, diagPayload,
+                        kDiagPayloadSize, g_cfg.cfgMeshKey, dframe);
+                    if (dn > 0 && radio.channelFree()) {
+                        radio.send(dframe, dn);
+                    }
+                }
+            }
+        }
+        radio.park();
         feed();
     }
 
@@ -1071,6 +1189,42 @@ void runCycle(bool recovery)
     // (superseded by critical battery, which pins the max interval).
     if (locateNow && !batCritical) {
         sleepMs = 60'000;
+    }
+    // P2P leaf (ICD §10.4): align the wake to the hash-assigned data slot
+    // — the RTC alarm fires 120 s early (GPS window + sensor reads), the
+    // cycle then waits out the remainder to TX exactly in-slot. Asset
+    // mode and critical battery keep their own timing (the drip heals
+    // missed slots).
+    if (p2pLeafMode() && !batCritical && !locateNow &&
+        !flagOn(g_cfg.cfgAssetMode) && g_rtcTimeValid) {
+        const uint64_t notBefore =
+            rtcNowMs() + static_cast<uint64_t>(sleepMs) * 1000;
+        const uint64_t slotMs = p2p::nextDataSlotMs(
+            p2pOriginId(), static_cast<p2p::AirProfile>(g_cfg.cfgP2PProfile),
+            notBefore);
+        const uint64_t wakeMs = slotMs - 120'000;
+        const uint64_t aligned = wakeMs > rtcNowMs()
+                                     ? wakeMs - rtcNowMs()
+                                     : 0;
+        if (aligned > 60'000) {
+            sleepMs = static_cast<uint32_t>(
+                aligned > kSleepTableMs[kSleepTableLen - 1]
+                    ? kSleepTableMs[kSleepTableLen - 1]
+                    : aligned);
+            ESP_LOGI(TAG, "p2p slot-aligned sleep %u ms", sleepMs);
+        }
+    }
+    // P2P gateway: this whole wake belongs to the slot grid — the radio
+    // windows run here and the deep-sleep arming happens inside.
+    if (p2pGatewayMode()) {
+        const p2pgw::Context gctx{g_cfg, payload, kPayloadSize, batCritical};
+        bool slept = false;
+        p2pgw::wakePhase(gctx, &slept);
+        if (slept) {
+            return; // sleep armed for the next catch/predicted window
+        }
+        ESP_LOGW(TAG, "gateway wake fell through — leaf-style sleep");
+        return;
     }
     ESP_LOGI(TAG, "sleeping %u ms (bat %u mV, low=%d critical=%d)", sleepMs,
              t.batMv, batLow, batCritical);

@@ -16,9 +16,13 @@ idf_component_register(    SRCS
         "app/History.cpp"
         "app/Buffer.cpp"
         "app/Ota.cpp"
+        "app/P2pGateway.cpp"
+        "domain/P2pFrame.cpp"
+        "domain/P2pSchedule.cpp"
         "transports/lorawan/LoRaWanTransport.cpp"
         "transports/ble/BleTransport.cpp"
         "transports/wifi/WifiTransport.cpp"
+        "transports/p2p/P2pRadio.cpp"
         "transports/zigbee/ZigbeeTransport.cpp"
     INCLUDE_DIRS "." "drivers" "app" "domain" "transports"
     # NOTE: no REQUIRES — the main component implicitly depends on all

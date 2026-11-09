@@ -7,6 +7,7 @@ storage API, stores everything in SQLite and serves a graphed web UI.
 
 import asyncio
 import hashlib
+import json
 import logging
 import os
 import re
@@ -124,6 +125,90 @@ async def receive_diag(request: Request,
              device_id, decoded.get("fw_version"),
              decoded.get("boot_count", 0), decoded.get("unexpected_resets", 0))
     return {"ok": True, "device": device_id}
+
+
+# ------------------------- ingest: P2P star gateway (ICD §10.5) ----------
+
+@app.post("/p2p")
+@app.post("/api/p2p")
+async def p2p_ingest(request: Request, token: str = Query(None),
+                     device: str = Query(None)):
+    """One NDJSON line per frame the gateway heard on the mesh:
+    {"origin":"AABBCCDD","seq":N,"ts":epoch,"hex":"<body hex>"[,"rssi","snr"]}
+
+    The gateway identifies itself via ?device=; every line is stored under
+    the ORIGIN's id (source 'p2p' / 'p2p-hist'), frame_ts = the origin's
+    own gps time and f_cnt = the P2P seq counter — so dedup, retention and
+    the delivery-ratio analytics all work unchanged. The body type is
+    recovered from its length + schema byte (28 B telemetry vs 24/28/29
+    diag vs §2.1 history) exactly like the TTN ingest path."""
+    check_push_token(request, token)
+    gw = device or "p2p-gateway"
+    stored = 0
+    seen = set()
+    text = (await request.body()).decode("utf-8", errors="replace")
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        origin = str(entry.get("origin", "")).strip().upper()
+        raw_hex = str(entry.get("hex", "")).strip().lower()
+        if len(origin) != 8 or not raw_hex:
+            continue
+        try:
+            data = bytes.fromhex(raw_hex)
+        except ValueError:
+            continue
+        seen.add(origin)
+        frame_ts = int(entry.get("ts") or 0) or None
+        seq = entry.get("seq")
+        # Body type from length + schema byte (the §10.3 header's `type` is
+        # transport metadata; the server trusts the body shape): 28 B with
+        # a non-schema byte 0 = telemetry (fPort-1 shape), 24/28/29 with
+        # schema 3/4/5 = diagnostics, schema 0x01 = §2.1 history.
+        kind = None
+        if len(data) == 28 and data[0] not in (1, 3, 4, 5):
+            kind = "telemetry"
+        elif len(data) in (24, 29) or (len(data) == 28 and data[0] in (3, 4, 5)):
+            kind = "diagnostics"
+        elif len(data) >= 2 and data[0] == 1:
+            kind = "history"
+        if kind is None:
+            continue
+        try:
+            if kind == "telemetry":
+                decoded = decode_telemetry(data)
+                if frame_ts and db.has_frame(origin, "p2p", frame_ts, raw_hex):
+                    continue
+                db.insert_reading(origin, "p2p", decoded, raw_hex,
+                                  seen_at=frame_ts, frame_ts=frame_ts,
+                                  f_cnt=seq)
+                stored += 1
+            elif kind == "diagnostics":
+                decoded = decode_diagnostics(data)
+                if frame_ts and db.has_diagnostic(origin, frame_ts, raw_hex):
+                    continue
+                db.insert_diagnostic(origin, decoded, raw_hex)
+                stored += 1
+            else:
+                decoded = decode_history(data)
+                for e in decoded.get("entries", []):
+                    if e.get("gps_time") and db.has_history_fix(
+                            origin, e["gps_time"]):
+                        continue
+                    db.insert_reading(origin, "p2p-hist",
+                                      _history_as_reading(e), raw_hex,
+                                      seen_at=e.get("gps_time"), f_cnt=seq)
+                    stored += 1
+        except (ValueError, KeyError) as e:
+            log.info("p2p frame skipped (%s): %s", origin, e)
+    log.info("p2p batch from %s: %d stored (%d devices)", gw, stored,
+             len(seen))
+    return {"ok": True, "stored": stored, "devices": sorted(seen)}
 
 
 # ------------------------- ingest: TTN webhook -------------------------
@@ -517,6 +602,14 @@ def _cfg_from_form(form) -> tuple[bytes, str]:
         cfg_asset_heartbeat_h=byte("assetHeartbeatH", 24),
         cfg_burst_interval_min=byte("burstIntervalMin", 5),
         cfg_burst_max_per_day=byte("burstMaxPerDay", 20),
+        # P2P star (ICD §10) — a schema-5 envelope is emitted only when
+        # these are used, so existing app/fleet flows stay byte-identical
+        cfg_p2p=flag("cfgP2P"), cfg_p2p_role=flag("cfgP2PRole"),
+        cfg_p2p_profile=byte("cfgP2PProfile", 0),
+        cfg_p2p_rx_after_tx=flag("cfgP2PRxAfterTx"),
+        cfg_p2p_short_id=int(form.get("cfgP2PShortId", "0") or "0", 16),
+        cfg_mesh_key=hexbytes("cfgMeshKey", 16) if
+        form.get("cfgMeshKey", "").strip() else b"",
     )
     fname = "minilora-" + re.sub(r"[^A-Za-z0-9_-]+", "_", name) + ".cfg"
     return env, fname

@@ -14,16 +14,19 @@
 namespace minilora {
 
 inline constexpr size_t kConfigBodyV3Size = 159;   // v1 layout + cfgZigbee
-inline constexpr size_t kConfigSize = 164;         // v3 body + 5 asset bytes
+inline constexpr size_t kConfigBodyV4Size = 164;   // v3 body + 5 asset bytes
+inline constexpr size_t kConfigSize = 188;         // v4 body + 24 P2P bytes (§10)
 
 // Config write envelopes (see SW/Current/ICD.md §4):
 // 'C' | schema | body | CRC16-CCITT(body) LE
 //   schema 3: 159-byte body (asset fields default) — accepted
-//   schema 4: 164-byte body with asset config — CURRENT
+//   schema 4: 164-byte body with asset config — accepted
+//   schema 5: 188-byte body with the P2P fields — CURRENT
 inline constexpr size_t kConfigWriteV3Size = 163;  // 1 + 1 + 159 + 2
 inline constexpr size_t kConfigWriteV4Size = 168;  // 1 + 1 + 164 + 2
+inline constexpr size_t kConfigWriteV5Size = 192;  // 1 + 1 + 188 + 2
 inline constexpr uint8_t kConfigWriteMagic = 'C';
-inline constexpr uint8_t kConfigWriteMaxSize = kConfigWriteV4Size;
+inline constexpr uint8_t kConfigWriteMaxSize = kConfigWriteV5Size;
 
 struct __attribute__((packed)) DeviceConfig {
     // ---- v1 ABI (150 bytes) — DO NOT REORDER ----
@@ -52,6 +55,13 @@ struct __attribute__((packed)) DeviceConfig {
     uint8_t  cfgAssetHeartbeatH;  // hours between asset heartbeats (0 = 24)
     uint8_t  cfgBurstIntervalMin; // sleep after a motion burst (0 = 5)
     uint8_t  cfgBurstMaxPerDay;   // motion-GPS bursts per day (0 = 20)
+    // ---- v5 addition (P2P star, ICD §10) ----
+    uint8_t  cfgLoRaMode;         // 0 = LoRaWAN (default), 1 = P2P star
+    uint8_t  cfgP2PRole;          // 0 = leaf, 1 = gateway
+    uint8_t  cfgP2PProfile;       // 0 = long-range SF12, 1 = SF10, 2 = SF7
+    uint8_t  cfgP2PRxAfterTx;     // 1 = open the 2 s command window (default)
+    uint32_t cfgP2PShortId;       // 0 = derive from the DevEUI's last 4 B
+    uint8_t  cfgMeshKey[16];      // mesh PSK — all-zero keeps P2P disabled
 };
 static_assert(sizeof(DeviceConfig) == kConfigSize, "BLE ABI broken");
 
@@ -76,6 +86,13 @@ struct ConfigDefaults {
     uint8_t cfgAssetHeartbeatH;   // 0 = 24
     uint8_t cfgBurstIntervalMin;  // 0 = 5
     uint8_t cfgBurstMaxPerDay;    // 0 = 20
+    // P2P star (§10) — defaults applied when the field is absent
+    bool cfgP2P;                  // lora_mode = p2p (default false = LoRaWAN)
+    bool cfgP2PGateway;           // p2p_role = gateway (default leaf)
+    uint8_t cfgP2PProfile;        // 0 = long-range
+    bool cfgP2PRxAfterTx;         // default true
+    uint32_t cfgP2PShortId;       // 0 = derive from DevEUI
+    const uint8_t *meshKey;       // nullptr/zeroed = P2P disabled
 };
 
 /// Fill `cfg` with `d` (including parsing the dotted-quad IP).

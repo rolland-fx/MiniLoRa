@@ -1,10 +1,14 @@
 # MiniLoRa v2 partition table — 4 MB flash, OTA-capable + Zigbee NVRAM
 # (app partitions must be 0x10000-aligned)
+# P2P revision (2026-11-09): +64 KB per OTA slot for the P2P star
+# transport (slot scheduler, gateway RX/forward, batch push) — the
+# 128 KB zb_storage FAT and 128 KB coredump were oversized; both now
+# 64 KB. Rides the USB-flash generation; OTA layout is stable after it.
 # Name,     Type, SubType,  Offset,   Size,     Flags
 nvs,        data, nvs,      0x9000,   0x6000,
 phy_init,   data, phy,      0xf000,   0x1000,
 otadata,    data, ota,      0x10000,  0x2000,
-ota_0,      app,  ota_0,    0x20000,  0x1D0000,
-ota_1,      app,  ota_1,    0x1F0000, 0x1D0000,
-zb_storage, data, fat,      0x3C0000, 0x20000,
-coredump,   data, coredump, 0x3E0000, 0x20000,
+ota_0,      app,  ota_0,    0x20000,  0x1E0000,
+ota_1,      app,  ota_1,    0x200000, 0x1E0000,
+zb_storage, data, fat,      0x3E0000, 0x10000,
+coredump,   data, coredump, 0x3F0000, 0x10000,

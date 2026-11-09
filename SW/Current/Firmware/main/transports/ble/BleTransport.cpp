@@ -280,16 +280,16 @@ int configAccessCb(uint16_t, uint16_t, ble_gatt_access_ctxt *ctxt, void *)
 {
     switch (ctxt->op) {
     case BLE_GATT_ACCESS_OP_READ_CHR: {
-        // ICD §4: the read returns the schema-4 envelope
-        // ('C'|4|body|CRC) so the app can verify the CRC of what it read.
+        // ICD §4: the read returns the schema-5 envelope
+        // ('C'|5|body|CRC) so the app can verify the CRC of what it read.
         DeviceConfig cfg = g_stagedCfg;
-        uint8_t env[kConfigWriteV4Size];
+        uint8_t env[kConfigWriteV5Size];
         env[0] = kConfigWriteMagic;
-        env[1] = 4;
+        env[1] = 5;
         std::memcpy(env + 2, &cfg, kConfigSize);
         const uint16_t crc = crc16Ccitt(env + 2, kConfigSize);
-        env[kConfigWriteV4Size - 2] = static_cast<uint8_t>(crc & 0xFF);
-        env[kConfigWriteV4Size - 1] = static_cast<uint8_t>(crc >> 8);
+        env[kConfigWriteV5Size - 2] = static_cast<uint8_t>(crc & 0xFF);
+        env[kConfigWriteV5Size - 1] = static_cast<uint8_t>(crc >> 8);
         os_mbuf_append(ctxt->om, env, sizeof(env));
         g_clientInteracted = true;
         return 0;

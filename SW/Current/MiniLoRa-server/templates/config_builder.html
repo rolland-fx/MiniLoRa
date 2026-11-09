@@ -82,6 +82,20 @@ WiFi password in clear text — treat it like a credential.</p>
   <input type="number" name="burstMaxPerDay" min="0" max="255" placeholder="Bursts per day (0 = 20)"
          value="{{ form.get('burstMaxPerDay', '20') }}">
 
+  <h2>P2P star (no cloud — ICD §10)</h2>
+  <label><input type="checkbox" name="cfgP2P" {{ 'checked' if form.get('cfgP2P') }}> P2P mode (LoRa raw — no TTN)</label>
+  <label><input type="checkbox" name="cfgP2PRole" {{ 'checked' if form.get('cfgP2PRole') }}> Gateway role (leave unchecked for leaf)</label>
+  <select name="cfgP2PProfile">
+    <option value="0" {{ 'selected' if form.get('cfgP2PProfile', '0') == '0' }}>Long-range SF12 @ 869.525 (default)</option>
+    <option value="1" {{ 'selected' if form.get('cfgP2PProfile') == '1' }}>Balanced SF10 @ 869.525</option>
+    <option value="2" {{ 'selected' if form.get('cfgP2PProfile') == '2' }}>Bench SF7 @ 869.525</option>
+  </select>
+  <label><input type="checkbox" name="cfgP2PRxAfterTx" checked> Command window after each TX (recommended)</label>
+  <input type="text" name="cfgP2PShortId" placeholder="Short id hex (empty = from DevEUI)"
+         value="{{ form.get('cfgP2PShortId', '') }}">
+  <input type="text" name="cfgMeshKey" placeholder="Mesh key — 32 hex chars (REQUIRED for P2P)"
+         value="{{ form.get('cfgMeshKey', '') }}">
+
   <button type="submit">Download .cfg</button>
 </form>
 {% endblock %}

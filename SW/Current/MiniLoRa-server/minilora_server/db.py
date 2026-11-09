@@ -92,6 +92,12 @@ class Database:
             self._conn.execute("ALTER TABLE readings ADD COLUMN frame_ts INTEGER")
         except sqlite3.OperationalError:
             pass  # column exists
+        # LoRaWAN frame counter (TTN uplinks only) — delivery-ratio ground
+        # truth: counter gaps between received frames are lost frames.
+        try:
+            self._conn.execute("ALTER TABLE readings ADD COLUMN f_cnt INTEGER")
+        except sqlite3.OperationalError:
+            pass  # column exists
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.commit()
 
@@ -99,7 +105,7 @@ class Database:
 
     def insert_reading(self, device_id: str, source: str, decoded: dict,
                        raw_hex: str, seen_at: int = None,
-                       frame_ts: int = None) -> None:
+                       frame_ts: int = None, f_cnt: int = None) -> None:
         seen = seen_at or int(time.time())
         # Defense in depth against corrupted NMEA dates (2026-11-03 06:05:
         # one frame shipped a 2068 epoch): a GPS timestamp from the future
@@ -115,8 +121,8 @@ class Database:
                    (device_id, source, seen_at, frame_ts, gps_time, temp_c,
                     hum_pct, pressure_hpa, bat_mv, lux, acc_x_mg, acc_y_mg,
                     acc_z_mg, latitude, longitude, altitude_m, sats,
-                    gps_valid, awake_s, sleep_min, gpio, raw_hex)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    gps_valid, awake_s, sleep_min, gpio, raw_hex, f_cnt)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (device_id, source, seen, frame_ts, decoded.get("gps_time"),
                  decoded["temp_c"], decoded["hum_pct"], decoded["pressure_hpa"],
                  decoded["bat_mv"], decoded["lux"],
@@ -126,7 +132,7 @@ class Database:
                  decoded["sleep_min"],
                  (0x01 if decoded["gpio_led_green"] else 0) |
                  (0x02 if decoded["gpio_button2"] else 0),
-                 raw_hex))
+                 raw_hex, f_cnt))
             self._touch_device(device_id, source, seen)
         hook = self.on_reading
         if hook:
@@ -345,6 +351,36 @@ class Database:
             args.append(until)
         q += " ORDER BY seen_at ASC"
         return [dict(r) for r in self._conn.execute(q, args).fetchall()]
+
+    # ---- insights queries (delivery ratio / battery / cycles) ----
+    # Narrow projections so the analytics endpoint adds three cheap
+    # indexed scans instead of shipping full rows around.
+
+    def f_cnts(self, device_id: str, since: int) -> list:
+        """LoRaWAN frame counters (ASC) received in the window. NULL for
+        non-TTN sources — excluded here."""
+        return [r[0] for r in self._conn.execute(
+            """SELECT f_cnt FROM readings
+               WHERE device_id=? AND seen_at>=? AND f_cnt IS NOT NULL
+               ORDER BY seen_at ASC""", (device_id, since)).fetchall()]
+
+    def power_rows(self, device_id: str, since: int) -> list:
+        """(seen_at, bat_mv) ASC — the battery-projection input."""
+        return [(r[0], r[1]) for r in self._conn.execute(
+            """SELECT seen_at, bat_mv FROM readings
+               WHERE device_id=? AND seen_at>=? AND bat_mv IS NOT NULL
+               ORDER BY seen_at ASC""", (device_id, since)).fetchall()]
+
+    def cycle_rows(self, device_id: str, since: int) -> list:
+        """(seen_at, sleep_min, awake_s) ASC — the missed-cycle input.
+        History rows (ttn-hist) are excluded: a backfilled batch carries
+        original-time stamps with drip-feed spacing, which reads as gaps."""
+        return [(r[0], r[1], r[2]) for r in self._conn.execute(
+            """SELECT seen_at, sleep_min, awake_s FROM readings
+               WHERE device_id=? AND seen_at>=? AND sleep_min IS NOT NULL
+                 AND source NOT LIKE '%hist'
+               ORDER BY seen_at ASC""", (device_id, since)).fetchall()]
+
 
     def daily_agg(self, device_id, days: int = 30) -> list:
         """Per-UTC-day aggregates for the analytics charts. device_id is one

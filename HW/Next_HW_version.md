@@ -314,6 +314,14 @@ verification items below belong in the P6 bench session.
 1. **LIS3DH wake→read timing** — acc reads constant 133/133/133 across
    cycles smells like reading too early after wake (V1 used 25/50 ms
    settles). Load-bearing once the sensor is the wake source.
+   **Firmware fix 2026-11-09** (`Lis3dh.cpp`): 25 ms settle after the
+   ODR enable + every sample gated on `STATUS.ZYXDA` (10 × 2 ms poll,
+   timeout = honest `sensorReadFailure`). **Bench check to close it**:
+   flash → let it cycle 3-4 times → rotate the board 90° between
+   cycles → acc X/Y/Z in the app or Analytics page must now TRACK
+   orientation instead of repeating 133/133/133 (± a few mg). If
+   `sensor_read_failures` ticks up in the diag frame instead, the part
+   is slower than the datasheet says and the settle needs to grow.
 2. **Confirm the motion-burst path respects the critical-battery gate**
    — motion must not force a GPS cycle at battery cutoff.
 3. **PPS contention edge** — GPS PPS enabled + INT1 low at the same

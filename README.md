@@ -174,10 +174,11 @@ charger, repo reorganization and the public release.
 
 **Next moves — server** (no hardware needed, any order):
 
-1. **Delivery ratio from TTN `f_cnt`** — the definitive link-health
-   answer, one query (Next-Improv.md).
-2. **Battery projection + missed-cycle detection** — turn two graphs
-   into two warnings.
+1. ~~**Delivery ratio from TTN `f_cnt`**~~ **done** — stored per uplink,
+   delivery card per identity on the Analytics page.
+2. ~~**Battery projection + missed-cycle detection**~~ **done** — days-to-critical
+   projection + missed-uplink count, both on the Analytics page with a ⚠
+   warning strip (`/api/analytics` `link`/`battery`/`cycles`/`warnings`).
 3. **Energy audit** — measures the real cost of every hardware change.
 4. Then the sensor-analytics menu: dew point, pressure trend, geofences,
    odometer, motion index.

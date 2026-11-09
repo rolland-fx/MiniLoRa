@@ -64,6 +64,7 @@ button.danger { background: transparent; color: var(--bad);
                 border-color: var(--bad); }
 button.danger:hover { background: var(--bad); color: #fff; }
 .muted { color: var(--muted); font-size: 14px; }
+.warning { color: var(--warn); font-size: 14px; margin: 4px 0; }
 
 /* collapsible field guide (diagnostics page) */
 details.field-guide { margin-top: 16px; }

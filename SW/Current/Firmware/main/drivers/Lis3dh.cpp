@@ -1,6 +1,8 @@
 #include "Lis3dh.hpp"
 
 #include <esp_log.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 namespace minilora {
 
@@ -12,6 +14,7 @@ constexpr uint8_t REG_CTRL4 = 0x23;
 constexpr uint8_t REG_CTRL5 = 0x24;
 constexpr uint8_t REG_CTRL6 = 0x25;
 constexpr uint8_t REG_CTRL3 = 0x22;
+constexpr uint8_t REG_STATUS = 0x27; // bit3 ZYXDA = X/Y/Z data available
 constexpr uint8_t REG_INT1_CFG = 0x30;
 constexpr uint8_t REG_INT1_SRC = 0x31; // read to clear the latched event
 constexpr uint8_t REG_INT1_THS = 0x32;
@@ -42,11 +45,39 @@ bool Lis3dh::init()
         !writeReg(REG_CTRL5, 0x08)) {
         return false;
     }
+    // Bench finding 2026-11 (HW doc §5.3 item 1): reads right after the
+    // ODR enable returned a CONSTANT 133/133/133 across cycles — the
+    // first conversion is not yet in the OUT registers (the datasheet's
+    // first-sample latency is 1/ODR + startup; v1 waited 25 ms here).
+    // Settle before the caller's first read; read() additionally gates
+    // each sample on STATUS.ZYXDA.
+    vTaskDelay(pdMS_TO_TICKS(25));
     return true;
 }
 
 bool Lis3dh::read(int16_t out[3])
 {
+    // Wait for a fresh X/Y/Z sample (ZYXDA) instead of blindly reading
+    // whatever is in OUT — a not-ready read is how the constant-133
+    // artefact happened. Cap: 10 × 2 ms = 20 ms (400 Hz produces a new
+    // sample every 2.5 ms, so a healthy sensor answers on the first
+    // poll; the cap only bites if the part is genuinely stalled, which
+    // then counts as a sensorReadFailure — honest telemetry).
+    const uint8_t rs = REG_STATUS;
+    bool ready = false;
+    for (int i = 0; i < 10; ++i) {
+        uint8_t st = 0;
+        if (i2c_master_transmit_receive(dev_, &rs, 1, &st, 1, 100) == ESP_OK &&
+            (st & 0x08)) {
+            ready = true;
+            break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(2));
+    }
+    if (!ready) {
+        ESP_LOGW(TAG, "no data-ready within 20 ms");
+        return false;
+    }
     const uint8_t reg = REG_OUT_X_L | 0x80;
     uint8_t buf[6];
     if (i2c_master_transmit_receive(dev_, &reg, 1, buf, 6, 100) != ESP_OK) {

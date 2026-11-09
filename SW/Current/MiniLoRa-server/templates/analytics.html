@@ -18,6 +18,7 @@
 </h2>
 
 <div class="cards" id="summary"></div>
+<div id="warnings"></div>
 
 <div class="charts">
   <div class="chart-box"><canvas id="c_temp"></canvas></div>
@@ -68,6 +69,35 @@ async function load() {
   ];
   document.getElementById('summary').innerHTML = cards.map(([v, k, unit]) =>
     `<div class="card"><div class="v">${v}<span>${unit}</span></div><div class="k">${k}</div></div>`).join('');
+
+  // derived health: delivery ratio (per TTN identity), battery projection,
+  // missed cycles — Next-Improv items 1-2. "—" when the window lacks data.
+  const pct = x => x == null ? '—' : (x * 100).toFixed(1) + '%';
+  const hc = [];
+  for (const [id, l] of Object.entries(data.link || {})) {
+    hc.push([pct(l.ratio), 'Delivery ' + id,
+             `(${l.sent} sent / ${l.lost} lost${l.resets ? ', ' + l.resets + ' resets' : ''})`]);
+  }
+  const b = data.battery || {};
+  if (b.days_to_cutoff != null) {
+    hc.push(['~' + b.days_to_cutoff, 'Days to critical',
+             `(${b.slope_mv_day} mV/day, r² ${b.r2 ?? '—'})`]);
+  } else if (b.bat_mv_now != null) {
+    hc.push([b.slope_mv_day != null ? b.slope_mv_day : '—', 'Battery slope',
+             'mV/day (no projection yet)']);
+  }
+  const c = data.cycles || {};
+  if (c.last_seen != null) {
+    hc.push([c.missed + (c.missed_since_last ? ' +' + c.missed_since_last : ''),
+             'Missed cycles',
+             `(${Math.round(c.expected_interval_s / 60)} min cadence${c.stale ? ', STALE >24 h' : ''})`]);
+  }
+  document.getElementById('summary').insertAdjacentHTML('beforeend',
+    hc.map(([v, k, unit]) =>
+      `<div class="card"><div class="v">${v}<span>${unit}</span></div><div class="k">${k}</div></div>`).join(''));
+
+  document.getElementById('warnings').innerHTML = (data.warnings || [])
+    .map(w => `<p class="warning">⚠ ${w}</p>`).join('');
 
   const labels = [...daily].reverse().map(d => d.day);
 

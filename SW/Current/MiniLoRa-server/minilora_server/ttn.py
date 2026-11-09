@@ -72,6 +72,9 @@ def parse_uplink_event(event: dict) -> list:
             "f_port": int(up.get("f_port", 1)),
             "bytes": frm_to_bytes(frm),
             "received_at": up.get("received_at"),
+            # LoRaWAN frame counter — the delivery-ratio ground truth
+            # (frames lost = counter gaps). Absent on WiFi pushes.
+            "f_cnt": up.get("f_cnt"),
         })
     return out
 
@@ -104,7 +107,7 @@ class TTNPoller:
         self.headers = {"Authorization": f"Bearer {api_key}"}
         self.device_ids = device_ids
         self.interval_s = interval_s
-        self.on_frame = on_frame  # callback(device_id, f_port, bytes, ts) -> new rows stored
+        self.on_frame = on_frame  # callback(device_id, f_port, bytes, ts, f_cnt) -> new rows stored
         self._client = httpx.AsyncClient(timeout=15.0)
 
     async def poll_once(self) -> int:
@@ -135,7 +138,8 @@ class TTNPoller:
                             # on_frame returns the number of NEW rows stored
                             # (dup frames dedup to 0) — fetch-now reports it.
                             n += self.on_frame(up["device_id"], up["f_port"],
-                                               up["bytes"], frame_ts) or 0
+                                               up["bytes"], frame_ts,
+                                               f_cnt=up.get("f_cnt")) or 0
                         except (ValueError, KeyError) as e:
                             log.debug("skipping frame from %s: %s",
                                       up["device_id"], e)

@@ -101,10 +101,17 @@ All derivable from frames **already stored**. Ranked loosely by value/effort.
 
 ## Recommended order
 
-1. **Delivery ratio via TTN `f_cnt`** — server-only, one query, definitive
-   link-health answer.
-2. **Battery projection + missed-cycle detection** — server-only, uses
-   columns already stored; converts two graphs into two warnings.
+1. ~~**Delivery ratio via TTN `f_cnt`**~~ **DONE 2026-11-09** — `f_cnt`
+   stored on every TTN uplink (webhook + poller), `link` block in
+   `/api/analytics`, delivery card per identity on the Analytics page.
+   Data before the column existed carries no counter, so the ratio
+   builds up from release day forward.
+2. ~~**Battery projection + missed-cycle detection**~~ **DONE 2026-11-09** —
+   `battery` (least-squares mV/day → days-to-critical at 3300 mV, needs
+   ≥ 4 points over ≥ 2 days) and `cycles` (missed uplinks from each
+   frame's own sleep_min cadence, 24 h stale flag) blocks in
+   `/api/analytics`; both render as Analytics cards and feed the
+   ⚠ warning strip.
 3. **Asset-mode field test + the bench checks above** — validates the
    already-built wake-on-motion instead of building anything.
 

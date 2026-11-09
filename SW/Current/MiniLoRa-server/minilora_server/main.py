@@ -141,14 +141,16 @@ async def ttn_webhook(request: Request, token: str = Query(None)):
         if kind == "telemetry":
             if db.has_duplicate(up["device_id"], "ttn", raw_hex):
                 continue
-            db.insert_reading(up["device_id"], "ttn", decoded, raw_hex)
+            db.insert_reading(up["device_id"], "ttn", decoded, raw_hex,
+                              f_cnt=up.get("f_cnt"))
         elif kind == "history":
             for entry in decoded["entries"]:
                 if db.has_duplicate(up["device_id"], "ttn-hist",
                                     raw_hex + str(entry["gps_time"])):
                     continue
                 db.insert_reading(up["device_id"], "ttn-hist",
-                                  _history_as_reading(entry), raw_hex)
+                                  _history_as_reading(entry), raw_hex,
+                                  f_cnt=up.get("f_cnt"))
         else:
             db.insert_diagnostic(up["device_id"], decoded, raw_hex)
         stored += 1
@@ -473,18 +475,61 @@ async def config_builder_build(request: Request):
 async def api_analytics(device_id: str, days: int = Query(30, le=365)):
     """Summary stats + per-day aggregates for the analytics page. The key
     may be a [device_groups] label: rows from all members are merged, so a
-    multi-identity tracker summarizes as one."""
+    multi-identity tracker summarizes as one.
+
+    Also carries the derived-health blocks (Next-Improv items 1-2):
+    link (delivery ratio from TTN f_cnt gaps — PER MEMBER, a merged
+    counter would be meaningless), battery (days-to-critical projection)
+    and cycles (missed-uplink count)."""
     from .analytics import summarize
+    from . import insights
     ids, _, _ = _resolve_device_key(device_id)
-    since = int(time.time()) - days * 86400
+    now = int(time.time())
+    since = now - days * 86400
     rows = []
+    link = {}
+    battery_rows = []
+    cycle_rows = []
     for i in ids:
         rows.extend(db.readings_all(i, since=since))
+        fc = db.f_cnts(i, since)
+        if len(fc) >= 2:
+            link[i] = insights.delivery_ratio(fc)
+        # battery/cycles merge across identities: a [device_groups] label
+        # is ONE physical tracker heard via several channels
+        battery_rows.extend(db.power_rows(i, since))
+        cycle_rows.extend(db.cycle_rows(i, since))
     rows.sort(key=lambda r: r["seen_at"] or 0)
+    battery_rows.sort(key=lambda r: r[0])
+    cycle_rows.sort(key=lambda r: r[0])
+    battery = insights.battery_projection(battery_rows)
+    cycles = insights.missed_cycles(cycle_rows, now_s=now)
+    # The two warnings (Next-Improv item 2): battery + cadence, in plain
+    # strings so both the web UI and the app can show them verbatim.
+    warnings = []
+    if battery["critical_now"]:
+        warnings.append("Battery below critical threshold "
+                        f"({battery['bat_mv_now']} mV)")
+    elif battery["degraded_now"]:
+        warnings.append("Battery degraded — consider charging "
+                        f"({battery['bat_mv_now']} mV)")
+    elif battery.get("warn_soon"):
+        warnings.append(f"Battery critical in ~{battery['days_to_cutoff']} days "
+                        f"({battery['slope_mv_day']} mV/day)")
+    if cycles["stale"]:
+        warnings.append(f"No data for over 24 h "
+                        f"({cycles['missed_since_last']} cycles missed)")
+    elif cycles["missed"] > 0:
+        warnings.append(f"{cycles['missed']} uplink(s) missed in the last "
+                        f"{days} days")
     return {
         "days": days,
         "summary": summarize(rows),
         "daily": db.daily_agg(ids, days),
+        "link": link,
+        "battery": battery,
+        "cycles": cycles,
+        "warnings": warnings,
     }
 
 
@@ -1225,7 +1270,7 @@ def _history_as_reading(entry: dict) -> dict:
 
 
 def _store_polled(device_id: str, f_port: int, data: bytes,
-                  frame_ts: int = None) -> int:
+                  frame_ts: int = None, f_cnt: int = None) -> int:
     """Store a polled TTN frame. Dedup keys:
     - telemetry/diag: the uplink's own received_at (frame_ts) + raw_hex —
       exact, so re-polling a 12 h window never duplicates;
@@ -1246,7 +1291,7 @@ def _store_polled(device_id: str, f_port: int, data: bytes,
         elif db.has_duplicate(device_id, "ttn", raw_hex):
             return 0  # no received_at: legacy 60-s heuristic
         db.insert_reading(device_id, "ttn", decoded, raw_hex,
-                          seen_at=frame_ts, frame_ts=frame_ts)
+                          seen_at=frame_ts, frame_ts=frame_ts, f_cnt=f_cnt)
         log.info("ttn poll: %s telemetry stored", device_id)
         return 1
     elif kind == "history":
@@ -1257,7 +1302,7 @@ def _store_polled(device_id: str, f_port: int, data: bytes,
                     continue
                 db.insert_reading(device_id, "ttn-hist",
                                   _history_as_reading(entry), raw_hex,
-                                  seen_at=entry["gps_time"])
+                                  seen_at=entry["gps_time"], f_cnt=f_cnt)
                 stored += 1
             else:
                 entry_hex = f"{raw_hex}#{i}"  # index-tagged: dedupable
@@ -1266,7 +1311,8 @@ def _store_polled(device_id: str, f_port: int, data: bytes,
                     continue
                 db.insert_reading(device_id, "ttn-hist",
                                   _history_as_reading(entry), entry_hex,
-                                  seen_at=frame_ts, frame_ts=frame_ts)
+                                  seen_at=frame_ts, frame_ts=frame_ts,
+                                  f_cnt=f_cnt)
                 stored += 1
         if stored:
             log.info("ttn poll: %s history (%d new entries) stored",

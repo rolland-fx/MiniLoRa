@@ -110,6 +110,20 @@ bash -c "$(curl -fsSL ...proxmox-lxc.sh)" -- --update 120   # re-pull code + res
 bash -c "$(curl -fsSL ...proxmox-lxc.sh)" -- --rootfs-storage local-lvm
 ```
 
+**Updating from the container's own shell** — every setup (fresh or
+`--update`) installs an `update` command:
+
+```bash
+pct enter 120        # or ssh in; then just:
+update               # re-pull code + refresh venv + restart the service
+```
+
+It re-runs the idempotent inner setup, so `config.toml` and `data/` are
+never touched, then waits for `/health` on the configured port (exit 1 +
+the last journal lines if the service doesn't come back). Containers
+installed from a local tarball (`--source`) get a deps-refresh +
+restart — new code still needs the host-side `--update`.
+
 The rootfs lands on a storage that supports container volumes
 (auto-detected, `local-lvm` preferred — `local` usually only holds
 ISOs/templates and would fail with *"does not support container

@@ -15,6 +15,8 @@
 # Update an existing container (code re-pulled from the same source):
 #   bash -c "$(curl -fsSL ...)" -- --update 120
 #   bash deploy/proxmox-lxc.sh --update 120
+# Or, from the CONTAINER's own shell (installed with every new setup):
+#   update          # re-pull code + refresh venv + restart, keep config/data
 #
 # What it builds: an unprivileged Debian 12 LXC running the server natively
 # (python venv + systemd, NO docker), data in /opt/minilora-server/data,
@@ -229,6 +231,47 @@ if [ -d /run/systemd/system ]; then
 else
   echo "(systemd not running here — unit written, boot-time start skipped)"
 fi
+
+# The in-container `update` command (community-scripts convention): type
+# `update` in the container shell to re-pull the code, refresh the venv
+# and restart — config.toml and data/ are never touched. It re-runs THIS
+# script (idempotent), then waits for /health on the configured port.
+cat > /usr/local/bin/update <<'UPDATE'
+#!/usr/bin/env bash
+# MiniLoRa-server update: pull the latest code + restart, keeping
+# config.toml and data/. Installed by the LXC setup; the heavy lifting
+# is the idempotent /opt/minilora-inner.sh.
+set -euo pipefail
+APP_DIR=/opt/minilora-server
+if [ -f /opt/minilora-deploy.env ]; then . /opt/minilora-deploy.env; fi
+echo "[MiniLoRa] updating (source: ${REPO_URL:-local tarball})…"
+if [ -z "${REPO_URL:-}" ]; then
+  echo "[MiniLoRa] note: installed from a local tarball — this refreshes"
+  echo "[MiniLoRa] deps and restarts, but NEW CODE needs a host-side:"
+  echo "[MiniLoRa]   bash proxmox-lxc.sh --update <ctid>"
+fi
+bash /opt/minilora-inner.sh
+
+PORT=$(python3 - <<PY
+import tomllib
+try:
+    print(tomllib.load(open("$APP_DIR/config.toml", "rb"))["server"].get("port", 8080))
+except Exception:
+    print(8080)
+PY
+)
+for i in $(seq 1 15); do
+  if curl -sf "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
+    echo "[MiniLoRa] update done — healthy on :$PORT"
+    exit 0
+  fi
+  sleep 1
+done
+echo "[MiniLoRa] WARNING: not healthy after 15 s — recent logs:" >&2
+journalctl -u minilora-server -n 20 --no-pager 2>/dev/null || true
+exit 1
+UPDATE
+chmod +x /usr/local/bin/update
 INNER
 }
 
@@ -261,5 +304,5 @@ ok "done. UI:     http://$IP:$CT_PORT"
 ok "        health:   http://$IP:$CT_PORT/health  ·  retention: /api/retention"
 ok "        root pw:  $PASS  (change: pct exec $CTID -- passwd root)"
 ok "        config:   $APP_DIR/config.toml (edit → pct exec $CTID -- systemctl restart minilora-server)"
-ok "        update:   bash $0 --update $CTID"
+ok "        update:   container shell: just type 'update'  ·  host: bash $0 --update $CTID"
 ok "        backups:  PVE vzdump + cron http://$IP:$CT_PORT/api/export/db"

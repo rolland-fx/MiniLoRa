@@ -256,7 +256,7 @@ if ! getent hosts deb.debian.org >/dev/null 2>&1; then
 fi
 
 apt-get update -qq
-apt-get install -y -qq python3-venv python3-pip git curl ca-certificates tzdata >/dev/null
+apt-get install -y -qq python3-venv python3-pip git curl ca-certificates tzdata whiptail >/dev/null
 
 mkdir -p "$APP_DIR"
 if [ -f /tmp/minilora-src.tar.gz ]; then
@@ -334,19 +334,41 @@ cat > /usr/local/bin/update <<'UPDATE'
 #!/usr/bin/env bash
 # MiniLoRa-server update: pull the latest code + restart, keeping
 # config.toml and data/. Installed by the LXC setup; the heavy lifting
-# is the idempotent /opt/minilora-inner.sh.
+# is the idempotent /opt/minilora-inner.sh. Interactive menu when a
+# terminal is present (community-scripts style); silent otherwise so
+# cron/scripts never hang on a dialog.
 set -euo pipefail
 APP_DIR=/opt/minilora-server
+LOG=/tmp/minilora-update.log
 if [ -f /opt/minilora-deploy.env ]; then . /opt/minilora-deploy.env; fi
-echo "[MiniLoRa] updating (source: ${REPO_URL:-local tarball})…"
-if [ -z "${REPO_URL:-}" ]; then
-  echo "[MiniLoRa] note: installed from a local tarball — this refreshes"
-  echo "[MiniLoRa] deps and restarts, but NEW CODE needs a host-side:"
-  echo "[MiniLoRa]   bash proxmox-lxc.sh --update <ctid>"
-fi
-bash /opt/minilora-inner.sh
 
-PORT=$(python3 - <<PY
+have_interactive_tty() {
+  command -v whiptail >/dev/null 2>&1 || return 1
+  (exec 3<>/dev/tty) 2>/dev/null || return 1
+  return 0
+}
+
+run_update() {   # $1 = quiet | verbose
+  echo "[MiniLoRa] updating (source: ${REPO_URL:-local tarball})…"
+  if [ -z "${REPO_URL:-}" ]; then
+    echo "[MiniLoRa] note: installed from a local tarball — this refreshes"
+    echo "[MiniLoRa] deps and restarts, but NEW CODE needs a host-side:"
+    echo "[MiniLoRa]   bash proxmox-lxc.sh --update <ctid>"
+  fi
+  if [ "$1" = quiet ]; then
+    if ! bash /opt/minilora-inner.sh >"$LOG" 2>&1; then
+      echo "[MiniLoRa] update FAILED — last 25 log lines ($LOG):" >&2
+      tail -25 "$LOG" >&2
+      exit 1
+    fi
+  else
+    bash /opt/minilora-inner.sh
+  fi
+}
+
+wait_healthy() {
+  local port i
+  port=$(python3 - <<PY
 import tomllib
 try:
     print(tomllib.load(open("$APP_DIR/config.toml", "rb"))["server"].get("port", 8080))
@@ -354,16 +376,35 @@ except Exception:
     print(8080)
 PY
 )
-for i in $(seq 1 15); do
-  if curl -sf "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
-    echo "[MiniLoRa] update done — healthy on :$PORT"
-    exit 0
-  fi
-  sleep 1
-done
-echo "[MiniLoRa] WARNING: not healthy after 15 s — recent logs:" >&2
-journalctl -u minilora-server -n 20 --no-pager 2>/dev/null || true
-exit 1
+  for i in $(seq 1 15); do
+    if curl -sf "http://127.0.0.1:$port/health" >/dev/null 2>&1; then
+      echo "[MiniLoRa] update done — healthy on :$port"
+      return 0
+    fi
+    sleep 1
+  done
+  echo "[MiniLoRa] WARNING: not healthy after 15 s — recent logs:" >&2
+  journalctl -u minilora-server -n 20 --no-pager 2>/dev/null || true
+  return 1
+}
+
+MODE=quiet
+if have_interactive_tty; then
+  CHOICE=$(whiptail --title "MiniLoRa-server update" --menu \
+    "Re-pull the code, refresh the venv and restart the service.\nconfig.toml and data/ are kept. Choose:" \
+    12 62 3 \
+    "1" "YES — quiet output (recommended)" \
+    "2" "YES — verbose output" \
+    "3" "NO — cancel update" \
+    --nocancel --default-item "1" 3>&1 1>&2 2>&3) \
+    || { echo "[MiniLoRa] update cancelled"; exit 0; }
+  case "$CHOICE" in
+    2) MODE=verbose ;;
+    3) echo "[MiniLoRa] update cancelled"; exit 0 ;;
+  esac
+fi
+run_update "$MODE"
+wait_healthy
 UPDATE
 chmod +x /usr/local/bin/update
 INNER

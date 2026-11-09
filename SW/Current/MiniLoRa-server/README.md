@@ -123,14 +123,19 @@ forces the silent defaults.
 
 ```bash
 pct enter 120        # or ssh in; then just:
-update               # re-pull code + refresh venv + restart the service
+update               # menu: quiet output / verbose / cancel
 ```
 
-It re-runs the idempotent inner setup, so `config.toml` and `data/` are
-never touched, then waits for `/health` on the configured port (exit 1 +
-the last journal lines if the service doesn't come back). Containers
-installed from a local tarball (`--source`) get a deps-refresh +
-restart — new code still needs the host-side `--update`.
+On a terminal it opens a **menu** (community-scripts style): quiet
+output (recommended — progress lines + a health check, full log in
+`/tmp/minilora-update.log`), verbose output, or cancel. Without a TTY
+(cron, `pct exec`) it updates silently with the same guarantees — it
+never hangs on a dialog. It re-runs the idempotent inner setup, so
+`config.toml` and `data/` are never touched, then waits for `/health`
+on the configured port (exit 1 + the last journal lines if the service
+doesn't come back). Containers installed from a local tarball
+(`--source`) get a deps-refresh + restart — new code still needs the
+host-side `--update`.
 
 The rootfs lands on a storage that supports container volumes
 (auto-detected, `local-lvm` preferred — `local` usually only holds

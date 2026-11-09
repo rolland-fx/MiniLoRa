@@ -110,6 +110,14 @@ bash -c "$(curl -fsSL ...proxmox-lxc.sh)" -- --update 120   # re-pull code + res
 bash -c "$(curl -fsSL ...proxmox-lxc.sh)" -- --rootfs-storage local-lvm
 ```
 
+**Interactive install**: on a terminal the installer opens a wizard —
+*default settings* (Enter) or *custom*, walking through CT ID, hostname,
+root password, RAM/cores/disk, template + rootfs storage (picked from
+the real `pvesm` list, local-lvm preselected) and DHCP vs static IP +
+gateway, with a confirm summary before anything is created. Scripted
+runs (any option, `--update`, cron, no TTY) skip it; `--no-wizard`
+forces the silent defaults.
+
 **Updating from the container's own shell** — every setup (fresh or
 `--update`) installs an `update` command:
 

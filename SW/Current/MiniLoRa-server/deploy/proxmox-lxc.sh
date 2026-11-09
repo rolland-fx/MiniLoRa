@@ -18,6 +18,11 @@
 # Or, from the CONTAINER's own shell (installed with every new setup):
 #   update          # re-pull code + refresh venv + restart, keep config/data
 #
+# Interactive on a terminal: an installer wizard asks default-vs-custom
+# (CT ID, resources, storages, network) before creating. Scripted runs
+# (any option, --update, cron, no TTY) skip it; --no-wizard forces the
+# silent defaults.
+#
 # What it builds: an unprivileged Debian 12 LXC running the server natively
 # (python venv + systemd, NO docker), data in /opt/minilora-server/data,
 # web UI on http://<ct-ip>:8080 — with the bounded-log and 100 MB DB
@@ -42,6 +47,8 @@ BRANCH=""
 UPDATE_CT=""
 SRC=""            # defaults to the directory this script lives in
 PASS=""
+NO_WIZARD=0
+EXPLICIT=0        # any explicit config option = scripted install
 
 msg()  { printf '\033[1;34m[MiniLoRa]\033[0m %s\n' "$*"; }
 ok()   { printf '\033[1;32m  ok\033[0m %s\n' "$*"; }
@@ -49,16 +56,17 @@ die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --id)       CTID="$2"; shift 2 ;;
-    --ip)       CTIP="$2"; shift 2 ;;
-    --gateway)  CTGW="$2"; shift 2 ;;
-    --bridge)   BRIDGE="$2"; shift 2 ;;
-    --storage)  STORAGE="$2"; ROOTFS="$2"; shift 2 ;;
-    --rootfs-storage) ROOTFS="$2"; shift 2 ;;
-    --password) PASS="$2"; shift 2 ;;
-    --repo)     REPO="$2"; shift 2 ;;
-    --branch)   BRANCH="$2"; shift 2 ;;
-    --source)   SRC="$2"; shift 2 ;;
+    --id)       CTID="$2"; EXPLICIT=1; shift 2 ;;
+    --ip)       CTIP="$2"; EXPLICIT=1; shift 2 ;;
+    --gateway)  CTGW="$2"; EXPLICIT=1; shift 2 ;;
+    --bridge)   BRIDGE="$2"; EXPLICIT=1; shift 2 ;;
+    --storage)  STORAGE="$2"; ROOTFS="$2"; EXPLICIT=1; shift 2 ;;
+    --rootfs-storage) ROOTFS="$2"; EXPLICIT=1; shift 2 ;;
+    --password) PASS="$2"; EXPLICIT=1; shift 2 ;;
+    --repo)     REPO="$2"; EXPLICIT=1; shift 2 ;;
+    --branch)   BRANCH="$2"; EXPLICIT=1; shift 2 ;;
+    --source)   SRC="$2"; EXPLICIT=1; shift 2 ;;
+    --no-wizard) NO_WIZARD=1; shift ;;
     --update)   UPDATE_CT="$2"; shift 2 ;;
     *)          die "unknown option $1 (see header)" ;;
   esac
@@ -74,6 +82,92 @@ if [[ -f "${BASH_SOURCE:-}" ]]; then
 elif [[ -z "$REPO" ]]; then
   REPO="https://github.com/rolland-fx/MiniLoRa"
   [[ -n "$BRANCH" ]] || BRANCH="main"
+fi
+
+# ---------- interactive wizard (community-scripts style) ----------
+# Enter = default settings; "No" walks through every parameter with the
+# defaults prefilled. Skipped whenever the install is scripted — any
+# explicit option, --no-wizard, --update, or a terminal-less run
+# (cron/CI) — so the documented one-liner keeps working everywhere.
+have_interactive_tty() {
+  command -v whiptail >/dev/null 2>&1 || return 1
+  (exec 3<>/dev/tty) 2>/dev/null || return 1
+  return 0
+}
+
+_wi() { whiptail --title "MiniLoRa-server" "$@" 3>&1 1>&2 2>&3; }
+
+_ask_text() { # prompt default -> stdout (empty answer keeps the default)
+  local v
+  v="$(_wi --inputbox "$1" 10 62 "$2")" || die "aborted at: $1"
+  echo "${v:-$2}"
+}
+
+_ask_menu() { # prompt default-tag tag desc [tag desc ...] -> tag
+  local prompt="$1" def="$2"; shift 2
+  local args=() v
+  while [[ $# -ge 2 ]]; do args+=("$1" "$2"); shift 2; done
+  v="$(_wi --default-item "$def" --menu "$prompt" \
+        $(( ${#args[@]} / 2 + 7 )) 62 $(( ${#args[@]} / 2 )) \
+        "${args[@]}")" || die "aborted at: $prompt"
+  echo "$v"
+}
+
+run_wizard() {
+  local nextid netmode rname rtype rdef="${ROOTFS:-}"
+  local -a rargs=()
+  nextid="$(pvesh get /cluster/nextid 2>/dev/null || echo 120)"
+
+  _wi --yesno "This will create an UNPRIVILEGED Debian 12 LXC running\nMiniLoRa-server (LAN tracker backend).\n\nDefaults: ${MEM_MB} MB RAM, ${CORES} core(s), ${DISK_GB} GB disk,\n${BRIDGE} + DHCP, web UI on :${CT_PORT}.\n\nContinue?" 13 66 \
+    || die "aborted"
+
+  if _wi --yesno "Use the default settings?\n\n(No = configure ID, resources, storage and network one by one)" 11 66; then
+    return   # keep every default — CTID/password/rootfs auto-resolve below
+  fi
+
+  CTID="$(_ask_text "Container ID (next free: $nextid)" "${CTID:-$nextid}")"
+  [[ "$CTID" =~ ^[0-9]+$ ]] || die "container ID must be numeric (got '$CTID')"
+  CT_HOSTNAME="$(_ask_text "Hostname" "$CT_HOSTNAME")"
+  PASS="$(_ask_text "Root password (empty = random, printed at the end)" "")"
+
+  MEM_MB="$(_ask_text "Memory (MB)" "$MEM_MB")"
+  CORES="$(_ask_text "CPU cores" "$CORES")"
+  DISK_GB="$(_ask_text "Disk (GB)" "$DISK_GB")"
+
+  STORAGE="$(_ask_text "Template storage (vztmpl)" "$STORAGE")"
+  # default: the same preference order as the create section (local-lvm
+  # first), so Enter on the menu lands on the storage pct create needs
+  rdef="$(pvesm status -content rootdir 2>/dev/null | awk 'NR>1 && /active/ {print $1}' | grep -m1 '^local-lvm$' || true)"
+  [[ -n "$rdef" ]] || rdef="$(pvesm status -content rootdir 2>/dev/null | awk 'NR>1 && /active/ {print $1; exit}')"
+  while read -r rname rtype; do
+    [[ -n "$rname" ]] || continue
+    rargs+=("$rname" "$rtype storage")
+  done < <(pvesm status -content rootdir 2>/dev/null | awk 'NR>1 && /active/ {print $1, $2}')
+  if [[ ${#rargs[@]} -ge 2 ]]; then
+    ROOTFS="$(_ask_menu "Rootfs storage (container directories)" \
+                 "${rdef:-local}" "${rargs[@]}")"
+  fi
+
+  BRIDGE="$(_ask_text "Network bridge" "$BRIDGE")"
+  netmode="$(_ask_menu "Network on ${BRIDGE}" "dhcp" \
+               "dhcp" "DHCP (recommended)" "static" "Static IPv4 + gateway")"
+  if [[ "$netmode" == "static" ]]; then
+    while :; do
+      CTIP="$(_ask_text "Static IPv4 (CIDR, e.g. 192.168.1.50/24)" "$CTIP")"
+      [[ -n "$CTIP" ]] && break
+    done
+    CTGW="$(_ask_text "Gateway" "$CTGW")"
+  fi
+
+  local netdesc="DHCP"
+  [[ -n "$CTIP" ]] && netdesc="$CTIP (gw ${CTGW:-none})"
+  _wi --yesno "Create CT $CTID '$CT_HOSTNAME'?\n\nRAM ${MEM_MB} MB · cores ${CORES} · disk ${DISK_GB} GB on ${ROOTFS:-auto-detect}\n${BRIDGE}: $netdesc · template storage: ${STORAGE}\n\nProceed?" 14 66 \
+    || die "aborted"
+}
+
+if [[ -z "$UPDATE_CT" && "$NO_WIZARD" -eq 0 && "$EXPLICIT" -eq 0 ]] \
+   && have_interactive_tty; then
+  run_wizard
 fi
 
 # ---------- target container: create (fresh) or reuse (update) ----------

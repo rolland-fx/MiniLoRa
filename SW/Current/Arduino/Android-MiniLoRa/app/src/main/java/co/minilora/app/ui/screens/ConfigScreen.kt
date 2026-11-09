@@ -65,6 +65,13 @@ fun ConfigScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
     var cfgAssetHeartbeatH by remember { mutableStateOf(DeviceConfig.deviceCfgAssetHeartbeatH.toString()) }
     var cfgBurstIntervalMin by remember { mutableStateOf(DeviceConfig.deviceCfgBurstIntervalMin.toString()) }
     var cfgBurstMaxPerDay by remember { mutableStateOf(DeviceConfig.deviceCfgBurstMaxPerDay.toString()) }
+    // P2P star (ICD §10) — provisioned via the schema-5 envelope
+    var cfgP2P by remember { mutableStateOf(false) }
+    var cfgP2PRole by remember { mutableStateOf(false) }
+    var cfgP2PProfile by remember { mutableStateOf(0) }
+    var cfgP2PRxAfterTx by remember { mutableStateOf(true) }
+    var cfgP2PShortId by remember { mutableStateOf("") }
+    var cfgMeshKey by remember { mutableStateOf("") }
 
     val status by vm.statusFrame.collectAsState()
     val busy by vm.bleBusy.collectAsState()
@@ -96,6 +103,13 @@ fun ConfigScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
         DeviceConfig.deviceCfgAssetHeartbeatH = cfgAssetHeartbeatH.toIntOrNull() ?: 24
         DeviceConfig.deviceCfgBurstIntervalMin = cfgBurstIntervalMin.toIntOrNull() ?: 5
         DeviceConfig.deviceCfgBurstMaxPerDay = cfgBurstMaxPerDay.toIntOrNull() ?: 20
+        // P2P (§10): kept in DeviceConfig so the editor survives restarts
+        DeviceConfig.deviceCfgP2P = cfgP2P
+        DeviceConfig.deviceCfgP2PGateway = cfgP2PRole
+        DeviceConfig.deviceCfgP2PProfile = cfgP2PProfile
+        DeviceConfig.deviceCfgP2PRxAfterTx = cfgP2PRxAfterTx
+        DeviceConfig.deviceCfgP2PShortId = cfgP2PShortId.trim()
+        DeviceConfig.deviceCfgMeshKey = cfgMeshKey.trim()
         DeviceConfig.save()
     }
 
@@ -120,6 +134,12 @@ fun ConfigScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
                 cfgAssetHeartbeatH.toIntOrNull() ?: 24,
                 cfgBurstIntervalMin.toIntOrNull() ?: 5,
                 cfgBurstMaxPerDay.toIntOrNull() ?: 20,
+                cfgP2P = cfgP2P,
+                cfgP2PRole = cfgP2PRole,
+                cfgP2PProfile = cfgP2PProfile,
+                cfgP2PRxAfterTx = cfgP2PRxAfterTx,
+                cfgP2PShortId = cfgP2PShortId.trim().hexToLong(),
+                cfgMeshKey = hexToBytes(cfgMeshKey, 16),
             ))
 
     /** Parsed device config (or .cfg file) → editor fields. */
@@ -154,6 +174,15 @@ fun ConfigScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
         (cfg["cfgAssetHeartbeatH"] as? Int)?.let { cfgAssetHeartbeatH = it.toString() }
         (cfg["cfgBurstIntervalMin"] as? Int)?.let { cfgBurstIntervalMin = it.toString() }
         (cfg["cfgBurstMaxPerDay"] as? Int)?.let { cfgBurstMaxPerDay = it.toString() }
+        // P2P: absent from pre-schema-5 bodies → editor values kept
+        cfgP2P = cfg["cfgLoRaMode"] == true
+        cfgP2PRole = cfg["cfgP2PRole"] == true
+        (cfg["cfgP2PProfile"] as? Int)?.let { cfgP2PProfile = it }
+        cfg["cfgP2PRxAfterTx"]?.let { cfgP2PRxAfterTx = it == true }
+        (cfg["cfgP2PShortId"] as? Long)?.let {
+            cfgP2PShortId = if (it == 0L) "" else "%08X".format(it)
+        }
+        (cfg["cfgMeshKey"] as? String)?.let { if (it.any { c -> c != '0' }) cfgMeshKey = it }
     }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -263,6 +292,44 @@ fun ConfigScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
                 Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
             Checkbox(checked = cfgAssetMode, onCheckedChange = { cfgAssetMode = it })
         }
+        // ---- P2P star (ICD §10) ----
+        Text("P2P star (no TTN — LoRa raw, needs a gateway device)",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text("P2P mode", style = MaterialTheme.typography.bodyMedium)
+                Checkbox(checked = cfgP2P, onCheckedChange = { cfgP2P = it })
+            }
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text("Gateway role", style = MaterialTheme.typography.bodyMedium)
+                Checkbox(checked = cfgP2PRole, onCheckedChange = { cfgP2PRole = it })
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            listOf("Long-range SF12", "Balanced SF10", "Bench SF7")
+                .forEachIndexed { i, label ->
+                    OutlinedButton(onClick = { cfgP2PProfile = i },
+                        enabled = cfgP2P) {
+                        Text(label, style = MaterialTheme.typography.labelSmall,
+                             color = if (cfgP2PProfile == i)
+                                 MaterialTheme.colorScheme.primary
+                                 else MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+        }
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text("Command window after each TX (recommended)",
+                Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            Checkbox(checked = cfgP2PRxAfterTx,
+                     onCheckedChange = { cfgP2PRxAfterTx = it }, enabled = cfgP2P)
+        }
+        OutlinedTextField(cfgP2PShortId, { cfgP2PShortId = it },
+            label = { Text("Short id hex (empty = from DevEUI)") },
+            enabled = cfgP2P, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(cfgMeshKey, { cfgMeshKey = it },
+            label = { Text("Mesh key — 32 hex chars (required for P2P)") },
+            enabled = cfgP2P, modifier = Modifier.fillMaxWidth())
         if (cfgAssetMode) {
             Text("Motion sensitivity", style = MaterialTheme.typography.bodySmall)
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {

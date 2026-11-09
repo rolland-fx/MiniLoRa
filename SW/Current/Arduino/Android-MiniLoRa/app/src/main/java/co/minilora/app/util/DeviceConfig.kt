@@ -62,6 +62,12 @@ object DeviceConfig {
     private const val KEY_DEV_CFG_ASSET_HB_H = "dev_cfg_asset_hb_h"
     private const val KEY_DEV_CFG_BURST_MIN = "dev_cfg_burst_min"
     private const val KEY_DEV_CFG_BURST_CAP = "dev_cfg_burst_cap"
+    private const val KEY_DEV_CFG_P2P = "dev_cfg_p2p"
+    private const val KEY_DEV_CFG_P2P_GW = "dev_cfg_p2p_gateway"
+    private const val KEY_DEV_CFG_P2P_PROFILE = "dev_cfg_p2p_profile"
+    private const val KEY_DEV_CFG_P2P_RX = "dev_cfg_p2p_rx_after_tx"
+    private const val KEY_DEV_CFG_P2P_ID = "dev_cfg_p2p_short_id"
+    private const val KEY_DEV_CFG_P2P_KEY = "dev_cfg_p2p_mesh_key"
 
     var targetDeviceName: String = "MiniLoRa"
     var targetMacAddress: String = ""
@@ -123,6 +129,13 @@ object DeviceConfig {
     var deviceCfgAssetHeartbeatH: Int = 24
     var deviceCfgBurstIntervalMin: Int = 5
     var deviceCfgBurstMaxPerDay: Int = 20
+    // P2P star (ICD §10) — editor-side mirror of the schema-5 envelope
+    var deviceCfgP2P: Boolean = false
+    var deviceCfgP2PGateway: Boolean = false
+    var deviceCfgP2PProfile: Int = 0
+    var deviceCfgP2PRxAfterTx: Boolean = true
+    var deviceCfgP2PShortId: String = ""
+    var deviceCfgMeshKey: String = ""
 
     private var prefs: android.content.SharedPreferences? = null
 
@@ -217,6 +230,12 @@ object DeviceConfig {
             deviceCfgAssetHeartbeatH = p.getInt(KEY_DEV_CFG_ASSET_HB_H, 24)
             deviceCfgBurstIntervalMin = p.getInt(KEY_DEV_CFG_BURST_MIN, 5)
             deviceCfgBurstMaxPerDay = p.getInt(KEY_DEV_CFG_BURST_CAP, 20)
+            deviceCfgP2P = p.getBoolean(KEY_DEV_CFG_P2P, false)
+            deviceCfgP2PGateway = p.getBoolean(KEY_DEV_CFG_P2P_GW, false)
+            deviceCfgP2PProfile = p.getInt(KEY_DEV_CFG_P2P_PROFILE, 0)
+            deviceCfgP2PRxAfterTx = p.getBoolean(KEY_DEV_CFG_P2P_RX, true)
+            deviceCfgP2PShortId = p.getString(KEY_DEV_CFG_P2P_ID, "") ?: ""
+            deviceCfgMeshKey = p.getString(KEY_DEV_CFG_P2P_KEY, "") ?: ""
 
             Log.d("DeviceConfig",
                 "BLE: name='$targetDeviceName' mac='$targetMacAddress' " +
@@ -269,6 +288,12 @@ object DeviceConfig {
             ?.putInt(KEY_DEV_CFG_ASSET_HB_H, deviceCfgAssetHeartbeatH)
             ?.putInt(KEY_DEV_CFG_BURST_MIN, deviceCfgBurstIntervalMin)
             ?.putInt(KEY_DEV_CFG_BURST_CAP, deviceCfgBurstMaxPerDay)
+            ?.putBoolean(KEY_DEV_CFG_P2P, deviceCfgP2P)
+            ?.putBoolean(KEY_DEV_CFG_P2P_GW, deviceCfgP2PGateway)
+            ?.putInt(KEY_DEV_CFG_P2P_PROFILE, deviceCfgP2PProfile)
+            ?.putBoolean(KEY_DEV_CFG_P2P_RX, deviceCfgP2PRxAfterTx)
+            ?.putString(KEY_DEV_CFG_P2P_ID, deviceCfgP2PShortId)
+            ?.putString(KEY_DEV_CFG_P2P_KEY, deviceCfgMeshKey)
             ?.apply()
         Log.d("DeviceConfig", "Saved all config")
     }
@@ -379,6 +404,12 @@ object DeviceConfig {
         props.setProperty("deviceCfgAssetHeartbeatH", deviceCfgAssetHeartbeatH.toString())
         props.setProperty("deviceCfgBurstIntervalMin", deviceCfgBurstIntervalMin.toString())
         props.setProperty("deviceCfgBurstMaxPerDay", deviceCfgBurstMaxPerDay.toString())
+        props.setProperty("deviceCfgP2P", deviceCfgP2P.toString())
+        props.setProperty("deviceCfgP2PGateway", deviceCfgP2PGateway.toString())
+        props.setProperty("deviceCfgP2PProfile", deviceCfgP2PProfile.toString())
+        props.setProperty("deviceCfgP2PRxAfterTx", deviceCfgP2PRxAfterTx.toString())
+        props.setProperty("deviceCfgP2PShortId", deviceCfgP2PShortId)
+        props.setProperty("deviceCfgMeshKey", deviceCfgMeshKey)
         FileWriter(file).use { props.store(it, "MiniLoRa Device Config") }
     }
 

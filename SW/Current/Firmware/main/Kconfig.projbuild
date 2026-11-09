@@ -2,7 +2,7 @@ menu "MiniLoRa"
 
     config MINILORA_FW_VERSION
         string "Firmware version"
-        default "2.6.17"
+        default "3.0.0"
         help
             Reported in the diagnostics uplink (fport 2) and in the BLE
             advertisement. Bump on every release; the Android app and the

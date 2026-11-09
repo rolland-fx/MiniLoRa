@@ -52,9 +52,16 @@ class BLEDeviceConfigurator(private val context: Context) {
         cfgZigbee: Boolean, cfgRange: Int,
         cfgAssetMode: Boolean, cfgMotionSens: Int,
         cfgAssetHeartbeatH: Int, cfgBurstIntervalMin: Int,
-        cfgBurstMaxPerDay: Int
+        cfgBurstMaxPerDay: Int,
+        // P2P star (ICD §10) — a 188-byte schema-5 body is emitted only
+        // when any of these is set; every existing flow stays schema 4
+        cfgP2P: Boolean = false, cfgP2PRole: Boolean = false,
+        cfgP2PProfile: Int = 0, cfgP2PRxAfterTx: Boolean = true,
+        cfgP2PShortId: Long = 0, cfgMeshKey: ByteArray = ByteArray(0)
     ): ByteArray {
-        val buf = ByteArray(CONFIG_BODY_V4)
+        val p2pWanted = cfgP2P || cfgP2PRole || cfgP2PProfile != 0 ||
+                cfgP2PShortId != 0L || cfgMeshKey.size == 16
+        val buf = ByteArray(if (p2pWanted) CONFIG_BODY_V5 else CONFIG_BODY_V4)
 
         // Strings (32 bytes each, null-padded, UTF-8)
         globalName.padEnd(32, '\u0000').toByteArray(Charsets.UTF_8).copyInto(buf, 0)
@@ -90,23 +97,41 @@ class BLEDeviceConfigurator(private val context: Context) {
         buf[162] = cfgBurstIntervalMin.coerceIn(0, 255).toByte()
         buf[163] = cfgBurstMaxPerDay.coerceIn(0, 255).toByte()
 
+        if (!p2pWanted) {
+            return buf
+        }
+        // P2P tail (ICD §10 / §4 schema 5, body offsets 164-187)
+        buf[164] = if (cfgP2P) 0x01 else 0x00
+        buf[165] = if (cfgP2PRole) 0x01 else 0x00
+        buf[166] = cfgP2PProfile.coerceIn(0, 2).toByte()
+        buf[167] = if (cfgP2PRxAfterTx) 0x01 else 0x00
+        ByteBuffer.wrap(buf, 168, 4).order(ByteOrder.BIG_ENDIAN)
+            .putInt(cfgP2PShortId.toLong().toInt())
+        if (cfgMeshKey.size == 16) {
+            cfgMeshKey.copyInto(buf, 172)
+        }
+
         return buf
     }
 
     /**
-     * Build the 168-byte ICD §4 write envelope (schema 4):
-     * `'C' | 4 | 164-byte body | CRC16-CCITT(body) LE`.
-     * The firmware rejects the write if the CRC does not match.
+     * Build the ICD §4 write envelope: schema 4 (168 B) for a v4 body,
+     * schema 5 (192 B) for the P2P body. The firmware rejects the write
+     * if the CRC does not match.
      */
     fun buildEnvelope(body: ByteArray): ByteArray {
-        require(body.size == CONFIG_BODY_V4) { "body must be $CONFIG_BODY_V4 bytes" }
-        val env = ByteArray(CONFIG_ENVELOPE_V4)
+        val isV5 = body.size == CONFIG_BODY_V5
+        require(body.size == CONFIG_BODY_V4 || isV5) {
+            "body must be $CONFIG_BODY_V4 or $CONFIG_BODY_V5 bytes"
+        }
+        val envLen = if (isV5) CONFIG_ENVELOPE_V5 else CONFIG_ENVELOPE_V4
+        val env = ByteArray(envLen)
         env[0] = 'C'.code.toByte()
-        env[1] = 4
+        env[1] = if (isV5) 5 else 4
         body.copyInto(env, 2)
         val crc = crc16Ccitt(body)
-        env[CONFIG_ENVELOPE_V4 - 2] = (crc and 0xFF).toByte()
-        env[CONFIG_ENVELOPE_V4 - 1] = ((crc shr 8) and 0xFF).toByte()
+        env[envLen - 2] = (crc and 0xFF).toByte()
+        env[envLen - 1] = ((crc shr 8) and 0xFF).toByte()
         return env
     }
 
@@ -116,8 +141,10 @@ class BLEDeviceConfigurator(private val context: Context) {
         private val STATUS_UUID  = UUID.fromString("0000CAFF-0000-1000-8000-00805F9B34FB")
         const val CONFIG_BODY_V3 = 159 // v1 layout + cfgZigbee
         const val CONFIG_BODY_V4 = 164 // + 5 asset bytes (P5)
+        const val CONFIG_BODY_V5 = 188 // + 24 P2P bytes (ICD §10)
         const val CONFIG_ENVELOPE_V3 = 163 // 'C'|3|159|CRC
-        const val CONFIG_ENVELOPE_V4 = 168 // 'C'|4|164|CRC  — current
+        const val CONFIG_ENVELOPE_V4 = 168 // 'C'|4|164|CRC
+        const val CONFIG_ENVELOPE_V5 = 192 // 'C'|5|188|CRC — P2P
         private const val TAG = "BLEDeviceConfigurator"
     }
 
@@ -232,7 +259,8 @@ class BLEDeviceConfigurator(private val context: Context) {
         gatt?.readCharacteristic(ch)
     }
 
-    /** Write a config envelope; schema 3 (163 B) and 4 (168 B) accepted. */
+    /** Write a config envelope; schema 3 (163 B), 4 (168 B) and 5 (192 B)
+     *  accepted. */
     fun writeConfig(payload: ByteArray) {
         val ch = characteristic ?: run {
             Log.e(TAG, "No characteristic discovered yet")
@@ -240,8 +268,9 @@ class BLEDeviceConfigurator(private val context: Context) {
             return
         }
         if (payload.size != CONFIG_ENVELOPE_V3 &&
-            payload.size != CONFIG_ENVELOPE_V4) {
-            Log.e(TAG, "Payload must be $CONFIG_ENVELOPE_V3 or $CONFIG_ENVELOPE_V4 bytes, got ${payload.size}")
+            payload.size != CONFIG_ENVELOPE_V4 &&
+            payload.size != CONFIG_ENVELOPE_V5) {
+            Log.e(TAG, "Payload must be $CONFIG_ENVELOPE_V3, $CONFIG_ENVELOPE_V4 or $CONFIG_ENVELOPE_V5 bytes, got ${payload.size}")
             onWriteComplete?.invoke(false)
             return
         }
@@ -261,14 +290,30 @@ class BLEDeviceConfigurator(private val context: Context) {
 
 
     /**
-     * Parse a config read: a schema-3 (163 B) or schema-4 (168 B) envelope,
-     * or the raw body (159/164). Legacy 158-byte blobs are not accepted.
-     * Asset fields are absent (null) from schema-3 bodies.
+     * Parse a config read: a schema-3 (163 B), schema-4 (168 B) or
+     * schema-5 (192 B, P2P) envelope, or the raw body (159/164/188).
+     * Legacy 158-byte blobs are not accepted. Asset fields are absent
+     * (null) from schema-3 bodies; P2P fields from pre-schema-5.
      */
     fun parsePayload(data: ByteArray): Map<String, Any> {
         var body = data
         var assetFields = false
-        if (data.size == CONFIG_ENVELOPE_V4 && data[0] == 'C'.code.toByte() &&
+        var p2pFields = false
+        if (data.size == CONFIG_ENVELOPE_V5 && data[0] == 'C'.code.toByte() &&
+            data[1].toInt() == 5) {
+            if (crc16Ccitt(data, 2, CONFIG_BODY_V5) !=
+                ((data[CONFIG_ENVELOPE_V5 - 2].toInt() and 0xFF) or
+                 ((data[CONFIG_ENVELOPE_V5 - 1].toInt() and 0xFF) shl 8))) {
+                Log.e(TAG, "Config read CRC mismatch")
+                return emptyMap()
+            }
+            body = data.copyOfRange(2, 2 + CONFIG_BODY_V5)
+            assetFields = true
+            p2pFields = true
+        } else if (data.size == CONFIG_BODY_V5) {
+            assetFields = true
+            p2pFields = true
+        } else if (data.size == CONFIG_ENVELOPE_V4 && data[0] == 'C'.code.toByte() &&
             data[1].toInt() == 4) {
             if (crc16Ccitt(data, 2, CONFIG_BODY_V4) !=
                 ((data[CONFIG_ENVELOPE_V4 - 2].toInt() and 0xFF) or
@@ -330,6 +375,16 @@ class BLEDeviceConfigurator(private val context: Context) {
             result["cfgAssetHeartbeatH"] = body[161].toInt() and 0xFF
             result["cfgBurstIntervalMin"] = body[162].toInt() and 0xFF
             result["cfgBurstMaxPerDay"] = body[163].toInt() and 0xFF
+        }
+        if (p2pFields) {
+            result["cfgLoRaMode"] = body[164] == 0x01.toByte()
+            result["cfgP2PRole"] = body[165] == 0x01.toByte()
+            result["cfgP2PProfile"] = body[166].toInt() and 0xFF
+            result["cfgP2PRxAfterTx"] = body[167] == 0x01.toByte()
+            val idBuf = ByteBuffer.wrap(body, 168, 4).order(ByteOrder.BIG_ENDIAN)
+            result["cfgP2PShortId"] = idBuf.int.toLong() and 0xFFFFFFFFL
+            result["cfgMeshKey"] =
+                body.sliceArray(172..187).joinToString("") { "%02x".format(it) }
         }
         return result
     }

@@ -30,7 +30,7 @@ from fastapi.templating import Jinja2Templates
 
 from .config import AppConfig, dump_config, load_config
 from . import config as _configmod
-from .decode import decode_diagnostics, decode_telemetry
+from .decode import decode_diagnostics, decode_history, decode_telemetry
 from .cfgbuild import SLEEP_MINUTES
 from .db import Database
 from .ttn import TTNPoller, decode_frame, parse_uplink_event
@@ -192,7 +192,8 @@ async def p2p_ingest(request: Request, token: str = Query(None),
                 decoded = decode_diagnostics(data)
                 if frame_ts and db.has_diagnostic(origin, frame_ts, raw_hex):
                     continue
-                db.insert_diagnostic(origin, decoded, raw_hex)
+                db.insert_diagnostic(origin, decoded, raw_hex,
+                                     seen_at=frame_ts, source="p2p-diag")
                 stored += 1
             else:
                 decoded = decode_history(data)

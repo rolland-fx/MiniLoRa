@@ -185,6 +185,48 @@ python -m pytest tests/ -q
 Env overrides (used by Docker): `MINILORA_CONFIG`, `MINILORA_DB`,
 `MINILORA_HOST`, `MINILORA_PORT`.
 
+## P2P star setup (no cloud — ICD §10)
+
+A **gateway** tracker (mains/USB/solar) listens on the mesh and forwards
+every heard frame to this server; **leaves** are TX-only (unchanged
+battery life) and reach the server through it. All frames carry the
+origin's GPS time, so storage order and dedup are exact.
+
+**1. Provision (once per device, over BLE)** — the config builder's new
+*P2P star* section (or the app's Config editor):
+
+| Field | Leaf | Gateway | Notes |
+|---|---|---|---|
+| P2P mode | ✓ | ✓ | `lora_mode=1` — the radio leaves LoRaWAN entirely |
+| Gateway role | — | ✓ | `p2p_role=1` — listens + forwards + own frame |
+| Profile | long-range SF12 | same as leaves | all nodes must match |
+| Mesh key | 32 hex chars | same | **required**; all-zero keeps P2P off |
+| Short id | empty | empty | auto-derived from the DevEUI (last 4 B, BE) |
+| WiFi server | — | ✓ IP+port+SSID | the forwarding target (`/p2p` or `/data`) |
+
+The generated `.cfg` is the standard CRC envelope — **schema 5 (192 B)
+when P2P fields are used, schema 4 (168 B) otherwise**; old flows are
+byte-identical. The app's Import/Read/Write understands both.
+
+**2. Server `config.toml` — nothing new is required.** The gateway
+reuses the existing `?device=` push path; frames land under the origin's
+id with `source='p2p'`. To merge a leaf's identities (its BLE name and
+its P2P short id) into one row, add the short id to the existing
+`[device_groups]`:
+
+```toml
+[device_groups]
+"Greenhouse Tracker" = ["MiniLoRa-FX-1", "A1B2C3D4"]
+```
+
+`push_token` keeps protecting writes; leave it empty on a LAN (the mesh
+key authenticates on the radio, not HTTP).
+
+**3. Fleet mix** — any device can stay on TTN (`lora_mode=0`, the
+default) while others run P2P; the server ingests both, and the
+delivery-ratio analytics cover the mesh too (the P2P seq counter is
+stored in the same `f_cnt` column).
+
 ## Ingest paths
 
 1. **Device WiFi push** — the tracker's `WifiTransport` POSTs the 28-byte

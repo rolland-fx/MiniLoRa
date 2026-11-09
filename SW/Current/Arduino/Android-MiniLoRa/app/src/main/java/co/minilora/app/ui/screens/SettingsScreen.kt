@@ -46,7 +46,6 @@ fun SettingsScreen(vm: AppViewModel, onDone: () -> Unit, modifier: Modifier = Mo
     var wifiServer by remember { mutableStateOf(DeviceConfig.wifiServerIp) }
     var wifiPort by remember { mutableStateOf(DeviceConfig.wifiServerPort.toString()) }
     var wifiInterval by remember { mutableStateOf(DeviceConfig.wifiPollIntervalSeconds.toString()) }
-    var bleInterval by remember { mutableStateOf(DeviceConfig.blePollIntervalSeconds.toString()) }
     var targetName by remember { mutableStateOf(DeviceConfig.targetDeviceName) }
     var targetMac by remember { mutableStateOf(DeviceConfig.targetMacAddress) }
     val context = LocalContext.current
@@ -65,8 +64,6 @@ fun SettingsScreen(vm: AppViewModel, onDone: () -> Unit, modifier: Modifier = Mo
         DeviceConfig.wifiServerIp = wifiServer.trim()
         DeviceConfig.wifiServerPort = wifiPort.toIntOrNull()?.coerceIn(1, 65535) ?: 5000
         DeviceConfig.wifiPollIntervalSeconds = wifiInterval.toIntOrNull() ?: 300
-        DeviceConfig.blePollIntervalSeconds =
-            (bleInterval.toIntOrNull() ?: 60).coerceAtLeast(30)
         DeviceConfig.targetDeviceName = targetName.trim()
         DeviceConfig.targetMacAddress = targetMac.trim()
         DeviceConfig.save()
@@ -83,7 +80,6 @@ fun SettingsScreen(vm: AppViewModel, onDone: () -> Unit, modifier: Modifier = Mo
         wifiServer = DeviceConfig.wifiServerIp
         wifiPort = DeviceConfig.wifiServerPort.toString()
         wifiInterval = DeviceConfig.wifiPollIntervalSeconds.toString()
-        bleInterval = DeviceConfig.blePollIntervalSeconds.toString()
         targetName = DeviceConfig.targetDeviceName
         targetMac = DeviceConfig.targetMacAddress
     }
@@ -185,11 +181,13 @@ fun SettingsScreen(vm: AppViewModel, onDone: () -> Unit, modifier: Modifier = Mo
         OutlinedTextField(wifiInterval, { wifiInterval = it },
             label = { Text("Poll interval (seconds)") }, modifier = Modifier.fillMaxWidth())
 
-        Text("BLE beacon polling", style = MaterialTheme.typography.titleMedium,
+        Text("BLE beacon reception", style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(top = 8.dp))
-        OutlinedTextField(bleInterval, { bleInterval = it },
-            label = { Text("Poll interval (seconds, min 30)") },
-            modifier = Modifier.fillMaxWidth())
+        Text("Runs whenever the app is open (battery-balanced scan, " +
+             "paused in background). Every MiniLoRa beacon in range is " +
+             "received — no interval to configure.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         Text("Target device", style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(top = 8.dp))

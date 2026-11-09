@@ -151,6 +151,14 @@ export DEBIAN_FRONTEND=noninteractive
 
 [ -f /opt/minilora-deploy.env ] && . /opt/minilora-deploy.env
 
+# DNS fallback: some unprivileged-LXC setups end up with a broken/empty
+# resolv.conf (networkd fails, ifupdown writes the lease but not the
+# nameservers) — apt dies instantly on it. If nothing resolves, use a
+# public resolver for the install.
+if ! getent hosts deb.debian.org >/dev/null 2>&1; then
+  echo "nameserver 1.1.1.1" > /etc/resolv.conf
+fi
+
 apt-get update -qq
 apt-get install -y -qq python3-venv python3-pip git curl ca-certificates tzdata >/dev/null
 

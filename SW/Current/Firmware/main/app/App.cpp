@@ -1013,7 +1013,8 @@ void runCycle(bool recovery)
     if (p2pLeafMode()) {
         P2pRadio radio;
         const auto profile = static_cast<p2p::AirProfile>(g_cfg.cfgP2PProfile);
-        if (radio.begin(profile)) {
+        const uint8_t txDbm = g_cfg.cfgP2PTxPower ? g_cfg.cfgP2PTxPower : 14;
+        if (radio.begin(profile, txDbm)) {
             const uint32_t origin = p2pOriginId();
             uint8_t frame[kPayloadSize + p2p::kOverhead];
             const size_t fn = p2p::buildFrame(

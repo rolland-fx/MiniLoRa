@@ -38,12 +38,13 @@ BLEDeviceConfigurator.buildBody() and the firmware's DeviceConfig):
   167      cfgP2PRxAfterTx (0/1)
   168..171 cfgP2PShortId (u32 BE, 0 = derive from DevEUI)
   172..187 cfgMeshKey (16 B; all-zero = P2P disabled)
+  188      cfgP2PTxPower (0 = 14 dBm default; 14-22 honored)
 """
 import struct
 
 BODY_V4 = 164
 ENVELOPE_V4 = BODY_V4 + 4  # magic + version + body + CRC16
-BODY_V5 = 188
+BODY_V5 = 189
 ENVELOPE_V5 = BODY_V5 + 4
 
 #: kSleepTableMs index -> minutes (Telemetry.hpp; payload byte 26 semantics)
@@ -74,9 +75,11 @@ def build_envelope(*, name: str, ssid: str, password: str, ip: str,
                    cfg_p2p: bool = False, cfg_p2p_role: bool = False,
                    cfg_p2p_profile: int = 0, cfg_p2p_rx_after_tx: bool = True,
                    cfg_p2p_short_id: int = 0,
-                   cfg_mesh_key: bytes = b"") -> bytes:
+                   cfg_mesh_key: bytes = b"",
+                   cfg_p2p_tx_power: int = 0) -> bytes:
     p2p_wanted = (cfg_p2p or cfg_p2p_role or cfg_p2p_profile or
-                  cfg_p2p_short_id or len(cfg_mesh_key) == 16)
+                  cfg_p2p_short_id or len(cfg_mesh_key) == 16 or
+                  cfg_p2p_tx_power != 0)
     body = bytearray(BODY_V5 if p2p_wanted else BODY_V4)
 
     def put_str(off: int, s: str) -> None:
@@ -114,6 +117,7 @@ def build_envelope(*, name: str, ssid: str, password: str, ip: str,
     body[168:172] = struct.pack(">I", cfg_p2p_short_id)
     if len(cfg_mesh_key) == 16:
         body[172:188] = cfg_mesh_key
+    body[188] = max(0, min(22, cfg_p2p_tx_power))
 
     crc = crc16_ccitt(body)
     return b"C" + b"\x05" + bytes(body) + struct.pack("<H", crc)

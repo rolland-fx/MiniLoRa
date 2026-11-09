@@ -68,6 +68,7 @@ object DeviceConfig {
     private const val KEY_DEV_CFG_P2P_RX = "dev_cfg_p2p_rx_after_tx"
     private const val KEY_DEV_CFG_P2P_ID = "dev_cfg_p2p_short_id"
     private const val KEY_DEV_CFG_P2P_KEY = "dev_cfg_p2p_mesh_key"
+    private const val KEY_DEV_CFG_P2P_TX = "dev_cfg_p2p_tx_power"
 
     var targetDeviceName: String = "MiniLoRa"
     var targetMacAddress: String = ""
@@ -136,6 +137,7 @@ object DeviceConfig {
     var deviceCfgP2PRxAfterTx: Boolean = true
     var deviceCfgP2PShortId: String = ""
     var deviceCfgMeshKey: String = ""
+    var deviceCfgP2PTxPower: Int = 0
 
     private var prefs: android.content.SharedPreferences? = null
 
@@ -236,6 +238,7 @@ object DeviceConfig {
             deviceCfgP2PRxAfterTx = p.getBoolean(KEY_DEV_CFG_P2P_RX, true)
             deviceCfgP2PShortId = p.getString(KEY_DEV_CFG_P2P_ID, "") ?: ""
             deviceCfgMeshKey = p.getString(KEY_DEV_CFG_P2P_KEY, "") ?: ""
+            deviceCfgP2PTxPower = p.getInt(KEY_DEV_CFG_P2P_TX, 0)
 
             Log.d("DeviceConfig",
                 "BLE: name='$targetDeviceName' mac='$targetMacAddress' " +
@@ -294,6 +297,7 @@ object DeviceConfig {
             ?.putBoolean(KEY_DEV_CFG_P2P_RX, deviceCfgP2PRxAfterTx)
             ?.putString(KEY_DEV_CFG_P2P_ID, deviceCfgP2PShortId)
             ?.putString(KEY_DEV_CFG_P2P_KEY, deviceCfgMeshKey)
+            ?.putInt(KEY_DEV_CFG_P2P_TX, deviceCfgP2PTxPower)
             ?.apply()
         Log.d("DeviceConfig", "Saved all config")
     }
@@ -410,6 +414,7 @@ object DeviceConfig {
         props.setProperty("deviceCfgP2PRxAfterTx", deviceCfgP2PRxAfterTx.toString())
         props.setProperty("deviceCfgP2PShortId", deviceCfgP2PShortId)
         props.setProperty("deviceCfgMeshKey", deviceCfgMeshKey)
+        props.setProperty("deviceCfgP2PTxPower", deviceCfgP2PTxPower.toString())
         FileWriter(file).use { props.store(it, "MiniLoRa Device Config") }
     }
 

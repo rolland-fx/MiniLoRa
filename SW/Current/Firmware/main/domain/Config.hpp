@@ -15,16 +15,16 @@ namespace minilora {
 
 inline constexpr size_t kConfigBodyV3Size = 159;   // v1 layout + cfgZigbee
 inline constexpr size_t kConfigBodyV4Size = 164;   // v3 body + 5 asset bytes
-inline constexpr size_t kConfigSize = 188;         // v4 body + 24 P2P bytes (§10)
+inline constexpr size_t kConfigSize = 189;         // v5 body + 25 P2P bytes (§10)
 
 // Config write envelopes (see SW/Current/ICD.md §4):
 // 'C' | schema | body | CRC16-CCITT(body) LE
 //   schema 3: 159-byte body (asset fields default) — accepted
 //   schema 4: 164-byte body with asset config — accepted
-//   schema 5: 188-byte body with the P2P fields — CURRENT
+//   schema 5: 189-byte body with the P2P fields — CURRENT
 inline constexpr size_t kConfigWriteV3Size = 163;  // 1 + 1 + 159 + 2
 inline constexpr size_t kConfigWriteV4Size = 168;  // 1 + 1 + 164 + 2
-inline constexpr size_t kConfigWriteV5Size = 192;  // 1 + 1 + 188 + 2
+inline constexpr size_t kConfigWriteV5Size = 193;  // 1 + 1 + 189 + 2
 inline constexpr uint8_t kConfigWriteMagic = 'C';
 inline constexpr uint8_t kConfigWriteMaxSize = kConfigWriteV5Size;
 
@@ -62,6 +62,8 @@ struct __attribute__((packed)) DeviceConfig {
     uint8_t  cfgP2PRxAfterTx;     // 1 = open the 2 s command window (default)
     uint32_t cfgP2PShortId;       // 0 = derive from the DevEUI's last 4 B
     uint8_t  cfgMeshKey[16];      // mesh PSK — all-zero keeps P2P disabled
+    uint8_t  cfgP2PTxPower;       // P2P TX power dBm (0 = 14; max 22 on the
+                                  // 869.525 sub-band — see §10.2)
 };
 static_assert(sizeof(DeviceConfig) == kConfigSize, "BLE ABI broken");
 
@@ -93,6 +95,7 @@ struct ConfigDefaults {
     bool cfgP2PRxAfterTx;         // default true
     uint32_t cfgP2PShortId;       // 0 = derive from DevEUI
     const uint8_t *meshKey;       // nullptr/zeroed = P2P disabled
+    uint8_t cfgP2PTxPower;        // 0 = 14 dBm default (max 22, §10.2)
 };
 
 /// Fill `cfg` with `d` (including parsing the dotted-quad IP).

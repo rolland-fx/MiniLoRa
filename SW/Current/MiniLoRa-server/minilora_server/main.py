@@ -611,6 +611,7 @@ def _cfg_from_form(form) -> tuple[bytes, str]:
         cfg_p2p_short_id=int(form.get("cfgP2PShortId", "0") or "0", 16),
         cfg_mesh_key=hexbytes("cfgMeshKey", 16) if
         form.get("cfgMeshKey", "").strip() else b"",
+        cfg_p2p_tx_power=byte("cfgP2PTxPower", 0),
     )
     fname = "minilora-" + re.sub(r"[^A-Za-z0-9_-]+", "_", name) + ".cfg"
     return env, fname

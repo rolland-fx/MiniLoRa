@@ -56,12 +56,17 @@ bool P2pRadio::begin(p2p::AirProfile profile, uint8_t powerDbm)
         ESP_LOGE(TAG, "radio begin failed: %d", state);
         return false;
     }
+    // +22 dBm pulls ~170 mA — raise RadioLib's OCP limit (default 60 mA)
+    // whenever the configured power exceeds the 14 dBm default.
+    if (powerDbm > 14) {
+        radio->setCurrentLimit(140);
+    }
     radio->setDio2AsRfSwitch(true);
     raiseRfSwitch();
     profile_ = profile;
     up_ = true;
-    ESP_LOGI(TAG, "p2p radio up: %.3f MHz SF%u slot %u ms",
-             ap.freqMHz, ap.sf, ap.slotLenMs);
+    ESP_LOGI(TAG, "p2p radio up: %.3f MHz SF%u slot %u ms, %u dBm",
+             ap.freqMHz, ap.sf, ap.slotLenMs, powerDbm);
     return true;
 }
 

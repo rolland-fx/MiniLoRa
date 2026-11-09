@@ -209,7 +209,7 @@ A corrupted write can therefore never misconfigure keys.
 |---|---|---|---|
 | 3 | 163 B | 159 B (v1 layout + cfgZigbee) | still accepted; asset fields default |
 | 4 | 168 B | 164 B = 159 + 5 asset bytes | still accepted; P2P fields default |
-| **5** | **192 B** | **188 B** = 164 + 24 P2P bytes | **current — see §10** |
+| **5** | **193 B** | **189 B** = 164 + 25 P2P bytes | **current — see §10** |
 
 **v3 envelope (163 bytes):**
 
@@ -241,16 +241,18 @@ GPS window (capped per day via net time) and re-report at the burst
 interval. NVS schema 3 stores the full 164-byte struct; schema 2 blobs
 (159 B) zero-fill the asset tail.
 
-**P2P body bytes (schema 5, offsets 164–187):** `cfgLoRaMode` (u8,
+**P2P body bytes (schema 5, offsets 164–188):** `cfgLoRaMode` (u8,
 0 = LoRaWAN — default, 1 = P2P star), `cfgP2PRole` (u8, 0 = leaf,
 1 = gateway), `cfgP2PProfile` (u8, 0 = long-range SF12 — default,
 1 = balanced SF10, 2 = bench SF7), `cfgP2PRxAfterTx` (u8, 0 off,
 1 on — default), `cfgP2PShortId` (u32 BE, 0 = derive from the last
 4 bytes of the DevEUI), `cfgMeshKey` (16 B — the shared mesh PSK;
 **all-zero keeps P2P disabled** regardless of `cfgLoRaMode`, so a key
-must be provisioned before the radio talks). NVS schema 5 stores the
-full 188-byte struct; schema 3/4 blobs zero-fill the P2P tail. The
-firmware writes schema 5 and accepts 3, 4 and 5 on write.
+must be provisioned before the radio talks), `cfgP2PTxPower` (u8,
+0 = default 14 dBm; 14–22 dBm honored, legal to 27 dBm ERP on the
+869.4–869.65 sub-band — see §10.2). NVS schema 5 stores the full
+189-byte struct; schema 3/4 blobs zero-fill the P2P tail. The firmware
+writes schema 5 and accepts 3, 4 and 5 on write.
 
 ## 5. BLE status read — characteristic `0000CAFF-…` (NEW)
 
@@ -359,6 +361,12 @@ write, never a reflash.
 | 0 long-range (default) | 869.525 MHz | 12 | 125 kHz | DE on; ~2.1 s per telemetry frame |
 | 1 balanced | 869.525 MHz | 10 | 125 kHz | ~4× shorter frames, ≈ half the range |
 | 2 bench | 869.525 MHz | 7 | 125 kHz | fast benching only |
+
+TX power defaults to 14 dBm and is configurable to **22 dBm**
+(`cfgP2PTxPower`) — the sub-band allows 27 dBm ERP, so +22 dBm with a
+2 dBi antenna (~24 dBm EIRP) stays legal. Every dB is ≈ 20 % more range;
++8 dB ≈ 2.5×. The SX1262 pulls ~170 mA at 22 dBm — fine for the powered
+gateway, budget it for solar leaves.
 
 Sync word **private** (`0x12/0x34`) — P2P and LoRaWAN traffic cannot see
 each other. CR 4/5, preamble 8, explicit header, CRC handled by the

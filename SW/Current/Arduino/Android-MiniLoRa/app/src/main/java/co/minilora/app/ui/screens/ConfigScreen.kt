@@ -72,6 +72,7 @@ fun ConfigScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
     var cfgP2PRxAfterTx by remember { mutableStateOf(true) }
     var cfgP2PShortId by remember { mutableStateOf("") }
     var cfgMeshKey by remember { mutableStateOf("") }
+    var cfgP2PTxPower by remember { mutableStateOf(DeviceConfig.deviceCfgP2PTxPower.toString()) }
 
     val status by vm.statusFrame.collectAsState()
     val busy by vm.bleBusy.collectAsState()
@@ -110,6 +111,7 @@ fun ConfigScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
         DeviceConfig.deviceCfgP2PRxAfterTx = cfgP2PRxAfterTx
         DeviceConfig.deviceCfgP2PShortId = cfgP2PShortId.trim()
         DeviceConfig.deviceCfgMeshKey = cfgMeshKey.trim()
+        DeviceConfig.deviceCfgP2PTxPower = cfgP2PTxPower.toIntOrNull() ?: 0
         DeviceConfig.save()
     }
 
@@ -140,6 +142,7 @@ fun ConfigScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
                 cfgP2PRxAfterTx = cfgP2PRxAfterTx,
                 cfgP2PShortId = cfgP2PShortId.trim().hexToLong(),
                 cfgMeshKey = hexToBytes(cfgMeshKey, 16),
+                cfgP2PTxPower = cfgP2PTxPower.toIntOrNull() ?: 0,
             ))
 
     /** Parsed device config (or .cfg file) → editor fields. */
@@ -183,6 +186,7 @@ fun ConfigScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
             cfgP2PShortId = if (it == 0L) "" else "%08X".format(it)
         }
         (cfg["cfgMeshKey"] as? String)?.let { if (it.any { c -> c != '0' }) cfgMeshKey = it }
+        (cfg["cfgP2PTxPower"] as? Int)?.let { cfgP2PTxPower = it.toString() }
     }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -329,6 +333,9 @@ fun ConfigScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
             enabled = cfgP2P, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(cfgMeshKey, { cfgMeshKey = it },
             label = { Text("Mesh key — 32 hex chars (required for P2P)") },
+            enabled = cfgP2P, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(cfgP2PTxPower, { cfgP2PTxPower = it },
+            label = { Text("TX power dBm (0 = 14; up to 22 — legal on 869.525)") },
             enabled = cfgP2P, modifier = Modifier.fillMaxWidth())
         if (cfgAssetMode) {
             Text("Motion sensitivity", style = MaterialTheme.typography.bodySmall)

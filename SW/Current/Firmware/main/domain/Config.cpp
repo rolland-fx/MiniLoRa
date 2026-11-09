@@ -60,6 +60,12 @@ void makeDefaults(const ConfigDefaults &d, DeviceConfig &cfg)
     if (d.meshKey) {
         std::memcpy(cfg.cfgMeshKey, d.meshKey, sizeof(cfg.cfgMeshKey));
     }
+    // 0 = default 14 dBm; clamp the provisioned value to the legal range
+    cfg.cfgP2PTxPower = d.cfgP2PTxPower == 0
+                            ? 0
+                            : (d.cfgP2PTxPower < 14 ? 14
+                               : d.cfgP2PTxPower > 22 ? 22
+                                                      : d.cfgP2PTxPower);
 }
 
 size_t serializeConfig(const DeviceConfig &cfg, uint8_t *out)

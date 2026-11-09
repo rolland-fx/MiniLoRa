@@ -57,10 +57,12 @@ class BLEDeviceConfigurator(private val context: Context) {
         // when any of these is set; every existing flow stays schema 4
         cfgP2P: Boolean = false, cfgP2PRole: Boolean = false,
         cfgP2PProfile: Int = 0, cfgP2PRxAfterTx: Boolean = true,
-        cfgP2PShortId: Long = 0, cfgMeshKey: ByteArray = ByteArray(0)
+        cfgP2PShortId: Long = 0, cfgMeshKey: ByteArray = ByteArray(0),
+        cfgP2PTxPower: Int = 0
     ): ByteArray {
         val p2pWanted = cfgP2P || cfgP2PRole || cfgP2PProfile != 0 ||
-                cfgP2PShortId != 0L || cfgMeshKey.size == 16
+                cfgP2PShortId != 0L || cfgMeshKey.size == 16 ||
+                cfgP2PTxPower != 0
         val buf = ByteArray(if (p2pWanted) CONFIG_BODY_V5 else CONFIG_BODY_V4)
 
         // Strings (32 bytes each, null-padded, UTF-8)
@@ -110,6 +112,7 @@ class BLEDeviceConfigurator(private val context: Context) {
         if (cfgMeshKey.size == 16) {
             cfgMeshKey.copyInto(buf, 172)
         }
+        buf[188] = cfgP2PTxPower.coerceIn(0, 22).toByte()
 
         return buf
     }
@@ -141,10 +144,10 @@ class BLEDeviceConfigurator(private val context: Context) {
         private val STATUS_UUID  = UUID.fromString("0000CAFF-0000-1000-8000-00805F9B34FB")
         const val CONFIG_BODY_V3 = 159 // v1 layout + cfgZigbee
         const val CONFIG_BODY_V4 = 164 // + 5 asset bytes (P5)
-        const val CONFIG_BODY_V5 = 188 // + 24 P2P bytes (ICD §10)
+        const val CONFIG_BODY_V5 = 189 // + 25 P2P bytes (ICD §10)
         const val CONFIG_ENVELOPE_V3 = 163 // 'C'|3|159|CRC
         const val CONFIG_ENVELOPE_V4 = 168 // 'C'|4|164|CRC
-        const val CONFIG_ENVELOPE_V5 = 192 // 'C'|5|188|CRC — P2P
+        const val CONFIG_ENVELOPE_V5 = 193 // 'C'|5|189|CRC — P2P
         private const val TAG = "BLEDeviceConfigurator"
     }
 
@@ -385,6 +388,7 @@ class BLEDeviceConfigurator(private val context: Context) {
             result["cfgP2PShortId"] = idBuf.int.toLong() and 0xFFFFFFFFL
             result["cfgMeshKey"] =
                 body.sliceArray(172..187).joinToString("") { "%02x".format(it) }
+            result["cfgP2PTxPower"] = body[188].toInt() and 0xFF
         }
         return result
     }

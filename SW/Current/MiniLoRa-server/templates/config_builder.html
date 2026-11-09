@@ -95,6 +95,8 @@ WiFi password in clear text — treat it like a credential.</p>
          value="{{ form.get('cfgP2PShortId', '') }}">
   <input type="text" name="cfgMeshKey" placeholder="Mesh key — 32 hex chars (REQUIRED for P2P)"
          value="{{ form.get('cfgMeshKey', '') }}">
+  <input type="number" name="cfgP2PTxPower" min="0" max="22" placeholder="TX power dBm (0 = 14; max 22)"
+         value="{{ form.get('cfgP2PTxPower', '0') }}">
 
   <button type="submit">Download .cfg</button>
 </form>

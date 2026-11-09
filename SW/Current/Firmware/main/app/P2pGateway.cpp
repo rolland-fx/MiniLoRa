@@ -190,7 +190,8 @@ void wakePhase(const Context &ctx, bool *slept)
 
     const auto profile = static_cast<p2p::AirProfile>(g_cfg->cfgP2PProfile);
     P2pRadio radio;
-    if (!radio.begin(profile)) {
+    if (!radio.begin(profile,
+                     g_cfg->cfgP2PTxPower ? g_cfg->cfgP2PTxPower : 14)) {
         return;
     }
     g_radio = &radio;

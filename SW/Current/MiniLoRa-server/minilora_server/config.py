@@ -124,11 +124,18 @@ def dump_config(cfg: AppConfig) -> str:
     return "\n".join(lines) + "\n"
 
 
-def load_config(path: Optional[str] = None) -> AppConfig:
+def load_config(path: Optional[str] = None, record: bool = True) -> AppConfig:
     """Load config.toml (missing keys/sections fall back to defaults).
 
     Env overrides: MINILORA_CONFIG (alternate file), MINILORA_DB (db path) —
     used by the Docker image to point at the mounted volume.
+
+    record: write the resolved path to CONFIG_PATH_USED — the "config this
+    server booted with" marker that /api/config saves back to. Validation
+    side-loads (the config import) must pass record=False or they would
+    redirect every later save to their temp file (found live 2026-11-09:
+    a restore wrote its config to /tmp because the boot marker had been
+    overwritten by the first import's validation load).
     """
     import os
 
@@ -187,6 +194,7 @@ def load_config(path: Optional[str] = None) -> AppConfig:
     if os.environ.get("MINILORA_LOG_BACKUPS"):
         cfg.server.log_backups = int(os.environ["MINILORA_LOG_BACKUPS"])
 
-    global CONFIG_PATH_USED
-    CONFIG_PATH_USED = path or ""
+    if record:
+        global CONFIG_PATH_USED
+        CONFIG_PATH_USED = path or ""
     return cfg

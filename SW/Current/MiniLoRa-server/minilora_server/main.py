@@ -11,7 +11,9 @@ import logging
 import os
 import re
 import signal
+import tempfile
 import time
+import tomllib
 from dataclasses import fields as dc_fields
 from datetime import datetime
 from pathlib import Path
@@ -348,6 +350,13 @@ async def api_config_save(request: Request):
 
 @app.post("/api/restart")
 async def api_restart():
+    _schedule_restart()
+    return {"restarting": True,
+            "note": "the server exits now; Docker/systemd restarts it "
+                    "with the saved config"}
+
+
+def _schedule_restart() -> None:
     """Exit the process so the supervisor restarts it with the new config:
     Docker (restart: unless-stopped) and systemd (Restart=always) both do.
     A bare foreground run just stays down — the UI says so."""
@@ -356,9 +365,72 @@ async def api_restart():
         log.warning("restart requested from the settings page — exiting")
         os.kill(os.getpid(), signal.SIGTERM)
     asyncio.get_running_loop().create_task(_exit_soon())
-    return {"restarting": True,
-            "note": "the server exits now; Docker/systemd restarts it "
-                    "with the saved config"}
+
+
+@app.get("/api/config/export")
+async def api_config_export():
+    """Download the live config.toml (backup). Serves the RAW file bytes —
+    a backup/restore round-trip must preserve comments and unknown keys,
+    not canonicalize them away. LAN-trusted like the rest of the
+    settings surface (no token; the server is never port-forwarded)."""
+    path = Path(_configmod.CONFIG_PATH_USED or "config.toml")
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    if not path.exists():
+        raise HTTPException(404, "no config file on disk")
+    stamp = datetime.now().strftime("%Y-%m-%d")
+    return Response(
+        path.read_bytes(),
+        media_type="application/toml",
+        headers={"Content-Disposition":
+                 f'attachment; filename="minilora-config-{stamp}.toml"'},
+    )
+
+
+@app.post("/api/config/import")
+async def api_config_import(request: Request,
+                            restart: bool = Query(False)):
+    """Restore a config backup: multipart 'file' field with a config.toml.
+    Validates EXACTLY like the settings form (parse + _validate_config)
+    before the atomic write, then writes the uploaded text verbatim —
+    comments included. restart=true applies it immediately (the settings
+    page always restores + restarts in one step)."""
+    form = await request.form()
+    f = form.get("file")
+    if f is None or isinstance(f, str):
+        raise HTTPException(400, "multipart 'file' field missing")
+    try:
+        text = (await f.read()).decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(400, "config file is not UTF-8 text")
+    # Capture the live path FIRST: load_config() below overwrites the
+    # CONFIG_PATH_USED global with its (temp-file) argument.
+    path = _configmod.CONFIG_PATH_USED or "config.toml"
+    fd, tmp = tempfile.mkstemp(suffix=".toml")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as tf:
+            tf.write(text)
+        try:
+            new_cfg = _configmod.load_config(tmp, record=False)
+        except tomllib.TOMLDecodeError as e:
+            raise HTTPException(400, f"invalid TOML: {e}")
+        except Exception as e:
+            raise HTTPException(400, f"invalid config: {e}")
+        _validate_config(new_cfg)
+    finally:
+        os.unlink(tmp)
+
+    tmp_w = path + ".tmp"
+    Path(tmp_w).write_text(text, encoding="utf-8")
+    os.replace(tmp_w, path)          # atomic: no half-written config on boot
+    log.info("config restored from upload to %s", path)
+    if restart:
+        _schedule_restart()
+        return {"saved": str(path), "imported": True, "restarting": True,
+                "note": "restored — the server exits now; the supervisor "
+                        "restarts it with the restored config"}
+    return {"saved": str(path), "imported": True,
+            "note": "takes effect at the next restart (POST /api/restart)"}
 
 
 # ------------------------- config builder -------------------------

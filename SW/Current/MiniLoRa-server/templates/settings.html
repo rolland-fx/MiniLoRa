@@ -59,6 +59,40 @@
   </p>
 </form>
 
+<div class="panel">
+  <h2>Backup &amp; restore</h2>
+  <p class="muted">Download the live <code>config.toml</code> as a backup,
+    or upload one to restore it. Uploads are validated before the write
+    and applied with a restart — comments in the file are preserved.</p>
+  <p>
+    <a class="back" href="/api/config/export" download>⬇ Download config.toml</a>
+    &nbsp;
+    <input type="file" id="cfgfile" accept=".toml,application/toml,text/plain"
+           style="display:inline-block">
+    <button type="button" onclick="importConfig()">⬆ Upload &amp; restore</button>
+    <span id="cfgmsg" class="muted"></span>
+  </p>
+</div>
+
+<script>
+async function importConfig() {
+  const msg = document.getElementById('cfgmsg');
+  const inp = document.getElementById('cfgfile');
+  if (!inp.files.length) { msg.textContent = 'choose a .toml file first'; return; }
+  msg.textContent = 'uploading…';
+  const fd = new FormData();
+  fd.append('file', inp.files[0]);
+  try {
+    const r = await fetch('/api/config/import?restart=true',
+                          { method: 'POST', body: fd });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { msg.textContent = 'failed: ' + (j.detail || r.status); return; }
+    msg.textContent = 'restored — restarting, page reloads when it is back…';
+    setTimeout(() => location.reload(), 6000);
+  } catch (e) { msg.textContent = 'failed: ' + e; }
+}
+</script>
+
 <script>
 async function saveConfig(restart) {
   const msg = document.getElementById('msg');

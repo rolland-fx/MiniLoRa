@@ -73,6 +73,11 @@ class MainActivity : ComponentActivity() {
 
     fun bleAdapter() = vm.bleAdapter
 
+    override fun onResume() {
+        super.onResume()
+        vm.onAppResume()
+    }
+
     override fun onPause() {
         super.onPause()
         vm.stopScanOnPause()

@@ -39,6 +39,8 @@ fun SettingsScreen(vm: AppViewModel, onDone: () -> Unit, modifier: Modifier = Mo
     var ttnApiKey by remember { mutableStateOf(DeviceConfig.ttnApiKey) }
     var ttnAppId by remember { mutableStateOf(DeviceConfig.ttnAppId) }
     var ttnDeviceId by remember { mutableStateOf(DeviceConfig.ttnDeviceId) }
+    var ttnExtraIds by remember {
+        mutableStateOf(DeviceConfig.ttnDeviceIds.joinToString(", ")) }
     var ttnRegion by remember { mutableStateOf(DeviceConfig.ttnRegion) }
     var ttnInterval by remember { mutableStateOf(DeviceConfig.ttnPollIntervalSeconds.toString()) }
     var wifiServer by remember { mutableStateOf(DeviceConfig.wifiServerIp) }
@@ -56,6 +58,8 @@ fun SettingsScreen(vm: AppViewModel, onDone: () -> Unit, modifier: Modifier = Mo
         DeviceConfig.ttnApiKey = ttnApiKey.trim()
         DeviceConfig.ttnAppId = ttnAppId.trim()
         DeviceConfig.ttnDeviceId = ttnDeviceId.trim()
+        DeviceConfig.ttnDeviceIds = ttnExtraIds.split(',', ';')
+            .map { it.trim() }.filter { it.isNotBlank() }.distinct()
         DeviceConfig.ttnRegion = ttnRegion.trim()
         DeviceConfig.ttnPollIntervalSeconds = ttnInterval.toIntOrNull() ?: 300
         DeviceConfig.wifiServerIp = wifiServer.trim()
@@ -73,6 +77,7 @@ fun SettingsScreen(vm: AppViewModel, onDone: () -> Unit, modifier: Modifier = Mo
         ttnApiKey = DeviceConfig.ttnApiKey
         ttnAppId = DeviceConfig.ttnAppId
         ttnDeviceId = DeviceConfig.ttnDeviceId
+        ttnExtraIds = DeviceConfig.ttnDeviceIds.joinToString(", ")
         ttnRegion = DeviceConfig.ttnRegion
         ttnInterval = DeviceConfig.ttnPollIntervalSeconds.toString()
         wifiServer = DeviceConfig.wifiServerIp
@@ -161,6 +166,10 @@ fun SettingsScreen(vm: AppViewModel, onDone: () -> Unit, modifier: Modifier = Mo
             label = { Text("Application ID") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(ttnDeviceId, { ttnDeviceId = it },
             label = { Text("Device ID") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(ttnExtraIds, { ttnExtraIds = it },
+            label = { Text("Extra device IDs (comma-separated)") },
+            supportingText = { Text("Additional trackers to poll over TTN — they appear as their own filter chips") },
+            modifier = Modifier.fillMaxWidth())
         OutlinedTextField(ttnRegion, { ttnRegion = it },
             label = { Text("Region (eu1, nam1, …)") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(ttnInterval, { ttnInterval = it },

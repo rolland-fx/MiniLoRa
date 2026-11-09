@@ -51,7 +51,10 @@ enum class DataSourceFlags {
 data class PayloadHistoryEntry(
     val payload: MiniLoRaPayload,
     val timeUnix: Long,
-    val source: DataSourceFlags
+    val source: DataSourceFlags,
+    val deviceKey: String = ""   // identity of the tracker this frame came
+                                 // from: BLE MAC, TTN device id or WiFi
+                                 // push name; "" = the configured device
 )
 
 /**

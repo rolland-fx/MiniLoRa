@@ -147,6 +147,35 @@ object WiFiClient {
         }
     }
 
+    /** Device list from the MiniLoRa-server (/api/devices) — used for the
+     *  identity→group mapping ([device_groups]) and the known-devices set. */
+    data class ServerDevice(val deviceId: String, val group: String?)
+
+    suspend fun fetchDevices(
+        serverIp: String,
+        serverPort: Int = DEFAULT_PORT,
+    ): List<ServerDevice> = withContext(Dispatchers.IO) {
+        try {
+            val url = "http://$serverIp:$serverPort/api/devices"
+            val request = Request.Builder().url(url).get().build()
+            val response = client.newCall(request).execute()
+            val body = response.body?.string() ?: return@withContext emptyList()
+            if (!response.isSuccessful) return@withContext emptyList()
+            val arr = org.json.JSONArray(body)
+            val out = mutableListOf<ServerDevice>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                val id = o.optString("device_id", "")
+                if (id.isBlank()) continue
+                out.add(ServerDevice(id, o.optString("group", "").ifBlank { null }))
+            }
+            out
+        } catch (e: Exception) {
+            Log.e(TAG, "device list fetch failed: ${e.message}", e)
+            emptyList()
+        }
+    }
+
     /**
      * Latest diagnostics frame from the server (rows are newest-first),
      * with its raw bytes for DiagStore persistence and the row's seen_at

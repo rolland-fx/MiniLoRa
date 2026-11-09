@@ -13,16 +13,28 @@ import java.io.File
  * restarts — until a new one arrives. Mirrors PayloadStore's file-JSON
  * pattern; the frame is stored raw so the parsed model can be rebuilt with
  * MiniLoRaDiag.fromBytes, which stays the single decoder.
+ *
+ * Keyed per tracker: each device identity (BLE MAC, TTN id, WiFi name)
+ * gets its own file, so a multi-tracker setup keeps one diag card per
+ * tracker. The legacy single-device file name is kept for the empty key.
  */
 object DiagStore {
 
     private const val TAG = "DiagStore"
     private const val FILE_NAME = "last_diag.json"
 
+    /** last_diag_<sanitized-key>.json; "" keeps the legacy file name. */
+    private fun fileFor(context: Context, deviceKey: String): File {
+        val safe = deviceKey.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        val name = if (deviceKey.isBlank()) FILE_NAME
+                   else "last_diag_$safe.json"
+        return File(context.filesDir, name)
+    }
+
     fun save(context: Context, diag: MiniLoRaDiag, raw: ByteArray,
-             receivedAtMs: Long) {
+             receivedAtMs: Long, deviceKey: String = "") {
         try {
-            val file = File(context.filesDir, FILE_NAME)
+            val file = fileFor(context, deviceKey)
             val obj = JSONObject().apply {
                 put("diagBase64",
                     Base64.encodeToString(raw, Base64.NO_WRAP))
@@ -35,9 +47,9 @@ object DiagStore {
     }
 
     /** The persisted diag + its receive time, or null when never received. */
-    fun load(context: Context): Pair<MiniLoRaDiag, Long>? {
+    fun load(context: Context, deviceKey: String = ""): Pair<MiniLoRaDiag, Long>? {
         try {
-            val file = File(context.filesDir, FILE_NAME)
+            val file = fileFor(context, deviceKey)
             if (!file.exists()) return null
             val obj = JSONObject(file.readText())
             val raw = Base64.decode(obj.getString("diagBase64"), Base64.NO_WRAP)

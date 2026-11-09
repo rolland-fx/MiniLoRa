@@ -15,6 +15,7 @@ data class DownlinkEntry(
     val sentAtMs: Long = 0, // wall clock of the uplink that confirmed
                             // delivery (the device pulled the frame in that
                             // uplink's RX window); 0 until sent
+    val deviceKey: String = ""  // tracker this command was queued for
 )
 
 /**
@@ -40,6 +41,7 @@ object DownlinkStore {
                     put("queuedAtMs", e.queuedAtMs)
                     put("sentAtMs", e.sentAtMs)
                     put("status", e.status)
+                    put("deviceKey", e.deviceKey)
                 })
             }
             file.writeText(arr.toString(2))
@@ -62,6 +64,7 @@ object DownlinkStore {
                     queuedAtMs = o.optLong("queuedAtMs", 0L),
                     sentAtMs = o.optLong("sentAtMs", 0L), // pre-2.6.16 rows: 0
                     status = o.optString("status", "pending"),
+                    deviceKey = o.optString("deviceKey", ""),
                 ))
             }
             return out

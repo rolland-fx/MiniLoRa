@@ -26,7 +26,11 @@ import co.minilora.app.util.DeviceConfig
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
@@ -51,6 +55,51 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _history = MutableStateFlow<List<PayloadHistoryEntry>>(emptyList())
     val history: StateFlow<List<PayloadHistoryEntry>> = _history
 
+    // ---- multi-tracker: identity filter + per-device display ----
+    data class DeviceChip(val label: String, val key: String)  // key "" = All
+
+    private val _selectedDeviceKey = MutableStateFlow("")
+    val selectedDeviceKey: StateFlow<String> = _selectedDeviceKey
+
+    /** History filtered to the selected device/group ("" = all trackers).
+     *  A group label matches every identity mapped to it. */
+    val displayHistory: StateFlow<List<PayloadHistoryEntry>> =
+        combine(_history, _selectedDeviceKey) { h, k ->
+            if (k.isBlank()) h
+            else h.filter {
+                it.deviceKey == k || DeviceConfig.deviceGroupMap[it.deviceKey] == k
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000),
+                  emptyList())
+
+    /** Filter chips: "All" + one per group label or bare identity. */
+    val deviceChips: StateFlow<List<DeviceChip>> = _history.map { entries ->
+        val labels = linkedMapOf<String, String>()   // label -> representative key
+        entries.forEach { e ->
+            val label = DeviceConfig.deviceGroupMap[e.deviceKey]
+                ?.takeIf { it.isNotBlank() } ?: e.deviceKey
+            if (label.isNotBlank()) labels.putIfAbsent(label, e.deviceKey)
+        }
+        buildList {
+            add(DeviceChip("All", ""))
+            labels.forEach { (label, key) -> add(DeviceChip(label, key)) }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun selectDeviceFilter(key: String) {
+        _selectedDeviceKey.value = key
+        if (key.isBlank()) return
+        // the selected tracker's stored diag is the one on display
+        val stored = DiagStore.load(getApplication(), key)
+        _diag.value = stored?.first
+        _diagReceivedAt.value = stored?.second
+        _diagDeviceKey.value = key
+    }
+
+    private fun displayNameOf(deviceKey: String): String =
+        DeviceConfig.deviceGroupMap[deviceKey]?.takeIf { it.isNotBlank() }
+            ?: deviceKey
+
     private val _snack = MutableStateFlow<String?>(null)
     val snack: StateFlow<String?> = _snack
     fun consumeSnack() { _snack.value = null }
@@ -74,6 +123,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // (pending → sent on the next uplink; superseded sends are "replaced").
     private val _downlinks = MutableStateFlow<List<DownlinkEntry>>(emptyList())
     val downlinks: StateFlow<List<DownlinkEntry>> = _downlinks
+    private val _diagDeviceKey = MutableStateFlow("")
+    val diagDeviceKey: StateFlow<String> = _diagDeviceKey
     private val _ttnPolling = MutableStateFlow(false)
     val ttnPolling: StateFlow<Boolean> = _ttnPolling
     private val _wifiPolling = MutableStateFlow(false)
@@ -87,7 +138,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     init {
         viewModelScope.launch {
             val saved = PayloadStore.load(app)
-            if (saved.isNotEmpty()) _history.value = saved
+            // v1 entries carried no identity: they belonged to the
+            // configured tracker (the only one the app could hear then).
+            if (saved.isNotEmpty()) _history.value = saved.map {
+                if (it.deviceKey.isBlank())
+                    it.copy(deviceKey = DeviceConfig.targetDeviceName)
+                else it
+            }
         }
         // The last diag survives restarts: shown until a new one arrives.
         DiagStore.load(app)?.let { (diag, at) ->
@@ -96,11 +153,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         _downlinks.value = DownlinkStore.load(app)
         purgeExpiredDownlinks()  // yesterday's receipts start empty
-        // Beacon reception doubles as telemetry: every parsed advertisement
-        // lands in the history (same behaviour as the v1 app).
+        // Beacon reception doubles as telemetry: EVERY parsed advertisement
+        // lands in the history tagged with its own tracker (multi-tracker
+        // reception) — the remembered one is just the primary card.
         viewModelScope.launch {
-            scanner.lastPayload.collect { hit ->
-                hit?.payload?.let { addHistory(it, DataSourceFlags.BLE) }
+            scanner.frames.collect { hit ->
+                hit.payload?.let {
+                    addHistory(it, DataSourceFlags.BLE, hit.device.address)
+                }
             }
         }
         // One-shot fetches at startup
@@ -156,11 +216,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         toast("Selected: $name")
     }
 
-    fun stopScanOnPause() = scanner.stop()
+    /** MainActivity.onPause: the always-on BLE pull stops when the app
+     *  goes to background (battery policy) and re-arms in onAppResume. */
+    fun stopScanOnPause() {
+        appResumed = false
+        scanner.stop()
+    }
 
     // ===== history =====
 
-    private fun addHistory(payload: MiniLoRaPayload, source: DataSourceFlags) {
+    /** One received frame destined for the history: the payload, its
+     *  timestamp, the feed it arrived on and the tracker identity. */
+    data class HistoryFeed(
+        val payload: MiniLoRaPayload,
+        val ts: Long,
+        val source: DataSourceFlags,
+        val deviceKey: String,
+    )
+
+    private fun addHistory(payload: MiniLoRaPayload, source: DataSourceFlags,
+                           deviceKey: String = "") {
         // GPS time when the payload carries it; otherwise the receive
         // wall-clock — a no-fix payload must still sort and merge by when
         // it was heard, not by 1970 (time 0).
@@ -175,8 +250,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             // Feeds reporting the same device wake within 10 s of each
             // other (BLE beacon + TTN downlink + server push of the same
             // cycle) collapse into ONE card showing the combined sources.
+            // The device key must match too — two trackers waking in the
+            // same 10 s window are two cards, not one.
             val existing = _history.value.firstOrNull {
-                Math.abs(it.timeUnix - ts) <= 10
+                it.deviceKey == deviceKey && Math.abs(it.timeUnix - ts) <= 10
             }
             if (existing != null) {
                 val combined = existing.source.combine(source)
@@ -189,7 +266,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 add(merged)
                 addAll(_history.value.filter { it !== existing })
             } else {
-                add(PayloadHistoryEntry(payload, ts, source))
+                add(PayloadHistoryEntry(payload, ts, source, deviceKey))
                 addAll(_history.value)
             }
         }
@@ -211,27 +288,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * stamp is the payload's GPS time when plausible, else the pull
      * source's own receive/seen time (TTN received_at, server seen_at).
      */
-    private fun mergeHistory(
-        entries: List<Triple<MiniLoRaPayload, Long, DataSourceFlags>>,
-    ) {
+    private fun mergeHistory(entries: List<HistoryFeed>) {
         if (entries.isEmpty()) return
         var list = _history.value
         val nowS = System.currentTimeMillis() / 1000
-        for ((payload, fallbackTs, source) in entries) {
+        for (feed in entries) {
+            val payload = feed.payload
+            val source = feed.source
+            val deviceKey = feed.deviceKey
             val ts = when {
                 payload.timeUnixSeconds in 1..(nowS + 600) ->
                     payload.timeUnixSeconds
-                fallbackTs > 0 -> fallbackTs
+                feed.ts > 0 -> feed.ts
                 else -> nowS
             }
-            val existing = list.firstOrNull { Math.abs(it.timeUnix - ts) <= 10 }
+            val existing = list.firstOrNull {
+                it.deviceKey == deviceKey && Math.abs(it.timeUnix - ts) <= 10
+            }
             list = if (existing != null) {
                 list.map {
                     if (it === existing) it.copy(source = it.source.combine(source))
                     else it
                 }
             } else {
-                (list + PayloadHistoryEntry(payload, ts, source))
+                (list + PayloadHistoryEntry(payload, ts, source, deviceKey))
                     .sortedByDescending { it.timeUnix }
             }
         }
@@ -255,24 +335,33 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * flowing — and blindly overwriting would flip the config toggles back
      * to the old state. bootCount is the device-side version: never regress.
      */
-    private fun setDiag(diag: MiniLoRaDiag, raw: ByteArray, receivedAtMs: Long) {
+    private fun setDiag(diag: MiniLoRaDiag, raw: ByteArray, receivedAtMs: Long,
+                        deviceKey: String) {
+        // The bootCount regression guard applies per device: tracker A at
+        // boot 500 must not silence tracker B at boot 3.
         val cur = _diag.value
-        if (cur != null && diag.bootCount < cur.bootCount) return
-        _diag.value = diag
-        _diagReceivedAt.value = receivedAtMs
-        DiagStore.save(getApplication(), diag, raw, receivedAtMs)
+        if (cur != null && diag.bootCount < cur.bootCount &&
+            _diagDeviceKey.value == deviceKey) return
+        DiagStore.save(getApplication(), diag, raw, receivedAtMs, deviceKey)
+        // display it only when it belongs to the selected tracker (or All)
+        if (deviceKey == _selectedDeviceKey.value || _selectedDeviceKey.value.isBlank()) {
+            _diag.value = diag
+            _diagReceivedAt.value = receivedAtMs
+            _diagDeviceKey.value = deviceKey
+        }
     }
 
     /** Record a successfully queued downlink; a previous pending one is
      *  superseded (TTN's downlink/push replaces the class-A queue). */
-    private fun recordDownlink(label: String, bytes: ByteArray) {
+    private fun recordDownlink(deviceKey: String, label: String, bytes: ByteArray) {
         val hex = bytes.joinToString(" ") { "%02X".format(it) }
         val now = System.currentTimeMillis()
         _downlinks.value = buildList {
             addAll(_downlinks.value.map {
-                if (it.status == "pending") it.copy(status = "replaced") else it
+                if (it.status == "pending" && it.deviceKey == deviceKey)
+                    it.copy(status = "replaced") else it
             })
-            add(DownlinkEntry(label, hex, now, "pending"))
+            add(DownlinkEntry(label, hex, now, "pending", deviceKey = deviceKey))
         }.takeLast(12)
         DownlinkStore.save(getApplication(), _downlinks.value)
     }
@@ -280,12 +369,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Called after each pull: an uplink received at/after the queue time
      *  carried the pending frame in its RX window — mark it sent, stamped
      *  with THAT uplink's time (the honest delivery moment, not the queue
-     *  time). */
-    private fun markDownlinksSent(newestUplinkSec: Long) {
+     *  time). Keyed per tracker: a pull for one device never flips
+     *  another device's receipt. */
+    private fun markDownlinksSent(deviceKey: String, newestUplinkSec: Long) {
         if (newestUplinkSec <= 0) return
         var changed = false
         _downlinks.value = _downlinks.value.map {
-            if (it.status == "pending" && newestUplinkSec * 1000 >= it.queuedAtMs) {
+            if (it.status == "pending" && it.deviceKey == deviceKey &&
+                newestUplinkSec * 1000 >= it.queuedAtMs) {
                 changed = true
                 it.copy(status = "sent", sentAtMs = newestUplinkSec * 1000)
             } else it
@@ -400,29 +491,59 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (!DeviceConfig.ttnConfigured()) return
         val region = DeviceConfig.ttnRegion.ifBlank { "eu1" }
         TTNClient.setBaseUrl("https://$region.cloud.thethings.network")
-        val dev = DeviceConfig.ttnDeviceId.ifBlank { DeviceConfig.targetDeviceName }
-        // One storage-API call serves everything: the history backfill, the
-        // latest diag, and the downlink-queue state (an uplink received at/
-        // after the queue time carried the pending frame in its RX window).
-        val frames = TTNClient.fetchRecentFrames(
-            DeviceConfig.ttnApiKey, DeviceConfig.ttnAppId, dev,
-        )
-        frames.maxOfOrNull { it.third }?.let { markDownlinksSent(it) }
-        frames.filter { it.first == 1 }.take(50).forEach { (_, b64, ts) ->
-            decodeTTNPayload(b64)?.let {
-                mergeHistory(listOf(Triple(it, ts, DataSourceFlags.TTN)))
-            }
-        }
-        frames.firstOrNull { it.first == 2 }?.let { (_, b64, ts) ->
-            base64ToBytes(b64)?.let { raw ->
-                MiniLoRaDiag.fromBytes(raw)?.let { diag ->
-                    // Stamp the DEVICE's send time (TTN received_at ≈ the
-                    // radio transmission), not the phone's pull time.
-                    val sentAtMs = if (ts > 0) ts * 1000
-                                   else System.currentTimeMillis()
-                    setDiag(diag, raw, sentAtMs)
+        val primary = DeviceConfig.ttnDeviceId.ifBlank { DeviceConfig.targetDeviceName }
+        // Multi-tracker: the primary id plus every extra one from Settings;
+        // each pull is tagged with its own identity.
+        val ids = (listOf(primary) + DeviceConfig.ttnDeviceIds)
+            .filter { it.isNotBlank() }.distinct()
+        for (dev in ids) {
+            // One storage-API call serves everything: the history backfill,
+            // the latest diag, and the downlink-queue state (an uplink
+            // received at/after the queue time carried the pending frame
+            // in its RX window).
+            val frames = TTNClient.fetchRecentFrames(
+                DeviceConfig.ttnApiKey, DeviceConfig.ttnAppId, dev,
+            ) ?: continue
+            frames.maxOfOrNull { it.third }?.let { markDownlinksSent(dev, it) }
+            frames.filter { it.first == 1 }.take(50).forEach { (_, b64, ts) ->
+                decodeTTNPayload(b64)?.let {
+                    mergeHistory(listOf(HistoryFeed(it, ts, DataSourceFlags.TTN, dev)))
                 }
             }
+            frames.firstOrNull { it.first == 2 }?.let { (_, b64, ts) ->
+                base64ToBytes(b64)?.let { raw ->
+                    MiniLoRaDiag.fromBytes(raw)?.let { diag ->
+                        // Stamp the DEVICE's send time (TTN received_at ≈ the
+                        // radio transmission), not the phone's pull time.
+                        val sentAtMs = if (ts > 0) ts * 1000
+                                       else System.currentTimeMillis()
+                        setDiag(diag, raw, sentAtMs, dev)
+                    }
+                }
+            }
+        }
+        fetchGroupMap()
+    }
+
+    /** identity -> display group, learned from the configured server's
+     *  /api/devices ([device_groups]) — a tracker heard as a BLE MAC, a
+     *  TTN id and a WiFi name then displays as ONE card. */
+    private suspend fun fetchGroupMap() {
+        if (!DeviceConfig.wifiConfigured()) return
+        try {
+            val rows = WiFiClient.fetchDevices(
+                DeviceConfig.wifiServerIp, DeviceConfig.wifiServerPort)
+            val map = rows.mapNotNull { r ->
+                val g = r.group?.takeIf { it.isNotBlank() }
+                        ?: return@mapNotNull null
+                r.deviceId to g
+            }.toMap()
+            if (map.isNotEmpty() && map != DeviceConfig.deviceGroupMap) {
+                DeviceConfig.deviceGroupMap = map
+                DeviceConfig.save()
+            }
+        } catch (e: Exception) {
+            Log.d("AppViewModel", "group map fetch skipped: ${e.message}")
         }
     }
 
@@ -459,31 +580,32 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val recent = WiFiClient.fetchRecentPayloads(
             DeviceConfig.wifiServerIp, DeviceConfig.wifiServerPort, dev,
         )
-        recent.maxOfOrNull { it.second }?.let { markDownlinksSent(it) }
+        val wifiKey = dev   // WiFi-path frames belong to the push-name identity
+        recent.maxOfOrNull { it.second }?.let { markDownlinksSent(wifiKey, it) }
         recent.forEach { (payload, seenAt) ->
-            mergeHistory(listOf(Triple(payload, seenAt, DataSourceFlags.WIFI)))
+            mergeHistory(listOf(HistoryFeed(payload, seenAt, DataSourceFlags.WIFI, wifiKey)))
         }
         WiFiClient.fetchLatestDiag(
             DeviceConfig.wifiServerIp, DeviceConfig.wifiServerPort, dev,
         )?.let { (diag, raw, seenAt) ->
             val sentAtMs = if (seenAt > 0) seenAt * 1000
                            else System.currentTimeMillis()
-            setDiag(diag, raw, sentAtMs)
+            setDiag(diag, raw, sentAtMs, wifiKey)
         }
+        fetchGroupMap()
     }
 
     // ===== BLE beacon polling =====
 
     /**
-     * BLE polling (ICD §6): the tracker only advertises during its brief
-     * wake window (~1-2 min every sleep cycle), so a continuous scan burns
-     * phone battery listening to empty air. Duty-cycle the scanner instead:
-     * burst-listen for BLE_BURST_MS, then idle for the rest of the interval.
-     * Hits land in the history through the same collector as manual scans.
-     * The on/off switch is persisted (DeviceConfig.blePollingEnabled) and
-     * auto-resumed from init(), so a restarted app keeps listening. A pause
-     * (stopScanOnPause) only kills the current burst — the next loop
-     * iteration re-arms the scanner.
+     * BLE reception is ALWAYS-ON while the app is open: the tracker
+     * beacons its telemetry whether or not any other feed is configured,
+     * so the phone keeps a BALANCED scan for the whole foreground time
+     * (started in onAppResume / the poll loop, stopped in onPause —
+     * battery-cheap, no duty-cycling). Hits land in the history through
+     * the frames collector, tagged with their own tracker identity. The
+     * on/off switch is persisted (DeviceConfig.blePollingEnabled, default
+     * on) and auto-resumed from init().
      */
     fun toggleBLEPolling() {
         if (_blePolling.value) {
@@ -492,28 +614,43 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             _blePolling.value = false
             DeviceConfig.blePollingEnabled = false
             DeviceConfig.save()
-            toast("BLE polling stopped")
+            toast("BLE reception stopped")
         } else {
             _blePolling.value = true
             DeviceConfig.blePollingEnabled = true
             DeviceConfig.save()
             bleJob = viewModelScope.launch { blePollLoop() }
-            toast("BLE polling: waiting for " +
-                DeviceConfig.targetDeviceName.ifBlank { "any MiniLoRa beacon" })
+            scanner.start(DeviceConfig.targetDeviceName,
+                          DeviceConfig.targetMacAddress,
+                          balanced = true) { /* transient */ }
+            toast("BLE reception on — every MiniLoRa beacon in range")
         }
     }
 
     private suspend fun blePollLoop() {
-        val burstMs = 30_000L
+        // Continuous BALANCED scan while the app is open ("BLE pulling
+        // active as long as the app is open") — stopped onPause, re-armed
+        // onResume. The frames flow feeds the history for every tracker.
         while (true) {
-            if (!scanActive.value) {
+            if (appResumed && !scanActive.value) {
                 scanner.start(DeviceConfig.targetDeviceName,
-                              DeviceConfig.targetMacAddress) { /* transient */ }
+                              DeviceConfig.targetMacAddress,
+                              balanced = true) { /* transient */ }
             }
-            delay(burstMs)
-            scanner.stop()
-            val rest = DeviceConfig.blePollIntervalSeconds * 1000L - burstMs
-            if (rest > 0) delay(rest)
+            delay(15_000)
+        }
+    }
+
+    private var appResumed = false
+
+    /** MainActivity.onResume: BLE pulling is active whenever the app is
+     *  open (the balanced scan starts here, stops in onPause). */
+    fun onAppResume() {
+        appResumed = true
+        if (DeviceConfig.blePollingEnabled && !scanActive.value) {
+            scanner.start(DeviceConfig.targetDeviceName,
+                          DeviceConfig.targetMacAddress,
+                          balanced = true) { /* transient */ }
         }
     }
 
@@ -527,12 +664,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val region = DeviceConfig.ttnRegion.ifBlank { "eu1" }
             TTNClient.setBaseUrl("https://$region.cloud.thethings.network")
             val bytes = MiniLoRaCommands.frame(opcode, arg)
+            val target = DeviceConfig.ttnDeviceId.ifBlank { DeviceConfig.targetDeviceName }
             val ok = TTNClient.sendDownlink(
                 DeviceConfig.ttnApiKey, DeviceConfig.ttnAppId,
-                DeviceConfig.ttnDeviceId.ifBlank { DeviceConfig.targetDeviceName },
+                target,
                 fPort = 3, bytes = bytes,
             )
-            if (ok) recordDownlink(label, bytes)
+            if (ok) recordDownlink(target, label, bytes)
             toast(if (ok) "$label queued" else "$label failed")
         }
     }
@@ -547,12 +685,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val region = DeviceConfig.ttnRegion.ifBlank { "eu1" }
             TTNClient.setBaseUrl("https://$region.cloud.thethings.network")
             val bytes = MiniLoRaCommands.configSet(flagId, on)
+            val target = DeviceConfig.ttnDeviceId.ifBlank { DeviceConfig.targetDeviceName }
             val ok = TTNClient.sendDownlink(
                 DeviceConfig.ttnApiKey, DeviceConfig.ttnAppId,
-                DeviceConfig.ttnDeviceId.ifBlank { DeviceConfig.targetDeviceName },
+                target,
                 fPort = 3, bytes = bytes,
             )
-            if (ok) recordDownlink(label, bytes)
+            if (ok) recordDownlink(target, label, bytes)
             toast(if (ok) "$label queued — confirm on next diag"
                   else "$label failed")
         }

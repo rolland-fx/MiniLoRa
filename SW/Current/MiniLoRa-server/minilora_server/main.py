@@ -159,7 +159,16 @@ async def ttn_webhook(request: Request, token: str = Query(None)):
 
 @app.get("/api/devices")
 async def api_devices():
-    return [dict(r) for r in db.devices()]
+    # identity -> display group ([device_groups]) so clients (the Android
+    # app) can present a multi-identity tracker as one card
+    group_of = {}
+    for label, ids in cfg.device_groups.items():
+        for i in ids:
+            group_of[i] = label
+    rows = [dict(r) for r in db.devices()]
+    for r in rows:
+        r["group"] = group_of.get(r["device_id"])
+    return rows
 
 
 @app.get("/api/readings/{device_id}")

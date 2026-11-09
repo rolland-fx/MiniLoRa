@@ -38,6 +38,7 @@ object PayloadStore {
                     put("payloadBase64", Base64.encodeToString(e.payload.rawBytesData, Base64.NO_WRAP))
                     put("timeUnix", e.timeUnix)
                     put("source", e.source.name)
+                    put("deviceKey", e.deviceKey)
                 }
                 arr.put(obj)
             }

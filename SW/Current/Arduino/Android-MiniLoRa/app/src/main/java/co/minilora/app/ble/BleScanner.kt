@@ -9,7 +9,9 @@ import android.bluetooth.le.ScanSettings
 import android.util.Log
 import co.minilora.app.data.model.MiniLoRaPayloadParser
 import co.minilora.app.ui.DeviceItem
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -32,6 +34,11 @@ class BleScanner(private val adapter: BluetoothAdapter?) {
     private val _lastPayload = MutableStateFlow<Hit?>(null)
     val lastPayload: StateFlow<Hit?> = _lastPayload
 
+    /** Every parsed beacon frame, from ANY MiniLoRa tracker — the
+     * multi-tracker feed (each Hit carries the advertising MAC). */
+    private val _frames = MutableSharedFlow<Hit>(extraBufferCapacity = 64)
+    val frames: MutableSharedFlow<Hit> = _frames
+
     private var scanner: android.bluetooth.le.BluetoothLeScanner? = null
     private val callbacks = mutableListOf<ScanCallback>()
     private val lastProcessedTime = HashMap<String, Long>()
@@ -41,7 +48,11 @@ class BleScanner(private val adapter: BluetoothAdapter?) {
         "0000FACE-0000-1000-8000-00805F9B34FB")
 
     @SuppressLint("MissingPermission")
-    fun start(targetName: String, targetMac: String, onError: (String) -> Unit) {
+    fun start(
+        targetName: String, targetMac: String,
+        balanced: Boolean = false,
+        onError: (String) -> Unit,
+    ) {
         if (_scanning.value) return
         try {
             scanner = adapter?.bluetoothLeScanner ?: run {
@@ -72,7 +83,8 @@ class BleScanner(private val adapter: BluetoothAdapter?) {
                 }
             }
             val base = ScanSettings.Builder()
-                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .setScanMode(if (balanced) ScanSettings.SCAN_MODE_BALANCED
+                             else ScanSettings.SCAN_MODE_LOW_LATENCY)
                 .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
                 .setPhy(ScanSettings.PHY_LE_ALL_SUPPORTED)
             val cbLegacy = mkCb()
@@ -132,7 +144,9 @@ class BleScanner(private val adapter: BluetoothAdapter?) {
             .replace(Regex("[\\x00-\\x1F\\x7F]"), "").trim()
         val nameMatch = targetName.isEmpty() || name.contains(targetName, ignoreCase = true)
         val macMatch = targetMac.isEmpty() || address.equals(targetMac, ignoreCase = true)
-        if (!nameMatch && !macMatch) return
+        // NO hard filter: every MiniLoRa beacon is parsed and tagged with
+        // its own MAC (multi-tracker reception). The remembered tracker
+        // only decides which hit lands in lastPayload (the primary card).
 
         // Two acceptance paths: a valid MiniLoRa beacon frame (telemetry
         // beacon), OR the config-window advertisement (name + config
@@ -154,7 +168,8 @@ class BleScanner(private val adapter: BluetoothAdapter?) {
         )
         _hits.value = (_hits.value.filterNot { it.device.address == address } + hit)
             .sortedByDescending { it.device.rssi }
-        _lastPayload.value = hit
+        if (nameMatch || macMatch) _lastPayload.value = hit
+        _frames.tryEmit(hit)
     }
 
     companion object {

@@ -1,5 +1,6 @@
 package co.minilora.app.ui.screens
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,9 +10,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -60,11 +63,27 @@ private val DATE_FMT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault
  */
 @Composable
 fun TrackerScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
-    val history by vm.history.collectAsState()
+    val history by vm.displayHistory.collectAsState()
+    val deviceChips by vm.deviceChips.collectAsState()
+    val selectedKey by vm.selectedDeviceKey.collectAsState()
     val status by vm.statusFrame.collectAsState()
 
     Column(modifier = modifier.fillMaxSize()) {
         var graphsOpen by remember { mutableStateOf(false) }
+        if (deviceChips.size > 1) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                       .padding(horizontal = 12.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                deviceChips.forEach { chip ->
+                    FilterChip(
+                        selected = chip.key == selectedKey,
+                        onClick = { vm.selectDeviceFilter(chip.key) },
+                        label = { Text(chip.label,
+                            style = MaterialTheme.typography.labelSmall) },
+                    )
+                }
+            }
+        }
         StatusHeader(history.firstOrNull(), status,
             onOpenGraphs = if (history.isNotEmpty()) ({ graphsOpen = true })
                            else null)

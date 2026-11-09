@@ -34,6 +34,10 @@ object DeviceConfig {
     private const val KEY_TTN_POLLING = "ttn_polling_enabled"
     private const val KEY_WIFI_POLLING = "wifi_polling_enabled"
 
+    // Multi-tracker: extra TTN device ids + the identity->group map
+    private const val KEY_TTN_DEVICE_IDS = "ttn_device_ids"
+    private const val KEY_DEVICE_GROUPS = "device_group_map"
+
     // Device config (BLE characteristic fields)
     private const val KEY_DEV_GLOBAL_NAME = "dev_global_name"
     private const val KEY_DEV_WIFI_SSID = "dev_wifi_ssid"
@@ -79,9 +83,21 @@ object DeviceConfig {
     var ttnPollingEnabled: Boolean = false
     var wifiPollingEnabled: Boolean = false
 
-    // BLE beacon polling (see AppViewModel.blePollLoop)
-    var blePollingEnabled: Boolean = false
+    // BLE beacon polling (see AppViewModel.blePollLoop). Default ON: the
+    // tracker beacons its telemetry whether or not any feed is configured,
+    // and the app is expected to pull it whenever it is open.
+    var blePollingEnabled: Boolean = true
     var blePollIntervalSeconds: Int = 60
+
+    // Additional TTN device ids to poll (multi-tracker): the primary stays
+    // ttnDeviceId (remote commands + the Settings field); every id here is
+    // also fetched and tagged with its own identity.
+    var ttnDeviceIds: List<String> = emptyList()
+
+    // identity -> display group label, learned from the configured
+    // MiniLoRa-server's /api/devices ([device_groups]) — a tracker heard
+    // as a BLE MAC, a TTN id and a WiFi name then shows as ONE card.
+    var deviceGroupMap: Map<String, String> = emptyMap()
 
     // Device BLE configuration fields (for writing to the MiniLoRa device)
     var deviceGlobalName: String = "MiniLoRa"
@@ -147,8 +163,8 @@ object DeviceConfig {
             wifiServerPort = p.getInt(KEY_WIFI_PORT, 5000)
             wifiPollIntervalSeconds = p.getInt(KEY_WIFI_POLL_INTERVAL, 300)
 
-            // BLE beacon polling
-            blePollingEnabled = p.getBoolean(KEY_BLE_POLLING, false)
+            // BLE beacon polling — default ON (the app pulls whenever open)
+            blePollingEnabled = p.getBoolean(KEY_BLE_POLLING, true)
             blePollIntervalSeconds = p.getInt(KEY_BLE_POLL_INTERVAL, 60)
 
             // Polling auto-resume. TTN/WiFi default ON: installs upgrading
@@ -157,6 +173,25 @@ object DeviceConfig {
             // explicit OFF is stored by the toggle and respected).
             ttnPollingEnabled = p.getBoolean(KEY_TTN_POLLING, true)
             wifiPollingEnabled = p.getBoolean(KEY_WIFI_POLLING, true)
+
+            // Multi-tracker: extra TTN ids + the identity->group map
+            ttnDeviceIds = run {
+                val s = p.getString(KEY_TTN_DEVICE_IDS, "") ?: ""
+                if (s.isBlank()) emptyList()
+                else try {
+                    val arr = org.json.JSONArray(s)
+                    (0 until arr.length()).map { arr.optString(it) }.filter { it.isNotBlank() }
+                } catch (_: Exception) { emptyList() }
+            }
+            deviceGroupMap = run {
+                val s = p.getString(KEY_DEVICE_GROUPS, "") ?: ""
+                if (s.isBlank()) emptyMap()
+                else try {
+                    val o = org.json.JSONObject(s)
+                    o.keys().asSequence().filter { o.optString(it).isNotBlank() }
+                        .associateWith { o.optString(it) }
+                } catch (_: Exception) { emptyMap() }
+            }
 
             // Device BLE configuration
             deviceGlobalName = p.getString(KEY_DEV_GLOBAL_NAME, "MiniLoRa") ?: "MiniLoRa"
@@ -204,6 +239,10 @@ object DeviceConfig {
             ?.putInt(KEY_WIFI_POLL_INTERVAL, wifiPollIntervalSeconds)
             ?.putBoolean(KEY_BLE_POLLING, blePollingEnabled)
             ?.putInt(KEY_BLE_POLL_INTERVAL, blePollIntervalSeconds)
+            ?.putString(KEY_TTN_DEVICE_IDS,
+                org.json.JSONArray(ttnDeviceIds).toString())
+            ?.putString(KEY_DEVICE_GROUPS,
+                org.json.JSONObject(deviceGroupMap).toString())
             ?.putBoolean(KEY_TTN_POLLING, ttnPollingEnabled)
             ?.putBoolean(KEY_WIFI_POLLING, wifiPollingEnabled)
             // Device BLE config

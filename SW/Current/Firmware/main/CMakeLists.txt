@@ -17,6 +17,7 @@ idf_component_register(    SRCS
         "app/Buffer.cpp"
         "app/Ota.cpp"
         "app/P2pGateway.cpp"
+        "app/P2pTrek.cpp"
         "domain/P2pFrame.cpp"
         "domain/P2pSchedule.cpp"
         "transports/lorawan/LoRaWanTransport.cpp"

@@ -53,14 +53,14 @@ class BLEDeviceConfigurator(private val context: Context) {
         cfgAssetMode: Boolean, cfgMotionSens: Int,
         cfgAssetHeartbeatH: Int, cfgBurstIntervalMin: Int,
         cfgBurstMaxPerDay: Int,
-        // P2P star (ICD §10) — a 188-byte schema-5 body is emitted only
-        // when any of these is set; every existing flow stays schema 4
-        cfgP2P: Boolean = false, cfgP2PRole: Boolean = false,
+        // P2P star / trek (ICD §10) — a 188-byte schema-5 body is emitted
+        // only when any of these is set; every existing flow stays schema 4
+        cfgLoRaMode: Int = 0, cfgP2PRole: Boolean = false,
         cfgP2PProfile: Int = 0, cfgP2PRxAfterTx: Boolean = true,
         cfgP2PShortId: Long = 0, cfgMeshKey: ByteArray = ByteArray(0),
         cfgP2PTxPower: Int = 0
     ): ByteArray {
-        val p2pWanted = cfgP2P || cfgP2PRole || cfgP2PProfile != 0 ||
+        val p2pWanted = cfgLoRaMode != 0 || cfgP2PRole || cfgP2PProfile != 0 ||
                 cfgP2PShortId != 0L || cfgMeshKey.size == 16 ||
                 cfgP2PTxPower != 0
         val buf = ByteArray(if (p2pWanted) CONFIG_BODY_V5 else CONFIG_BODY_V4)
@@ -102,8 +102,8 @@ class BLEDeviceConfigurator(private val context: Context) {
         if (!p2pWanted) {
             return buf
         }
-        // P2P tail (ICD §10 / §4 schema 5, body offsets 164-187)
-        buf[164] = if (cfgP2P) 0x01 else 0x00
+        // P2P tail (ICD §10 / §4 schema 5, body offsets 164-189)
+        buf[164] = cfgLoRaMode.coerceIn(0, 2).toByte()
         buf[165] = if (cfgP2PRole) 0x01 else 0x00
         buf[166] = cfgP2PProfile.coerceIn(0, 2).toByte()
         buf[167] = if (cfgP2PRxAfterTx) 0x01 else 0x00
@@ -380,7 +380,7 @@ class BLEDeviceConfigurator(private val context: Context) {
             result["cfgBurstMaxPerDay"] = body[163].toInt() and 0xFF
         }
         if (p2pFields) {
-            result["cfgLoRaMode"] = body[164] == 0x01.toByte()
+            result["cfgLoRaMode"] = body[164].toInt() and 0xFF
             result["cfgP2PRole"] = body[165] == 0x01.toByte()
             result["cfgP2PProfile"] = body[166].toInt() and 0xFF
             result["cfgP2PRxAfterTx"] = body[167] == 0x01.toByte()

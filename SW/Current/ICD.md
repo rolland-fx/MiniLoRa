@@ -475,6 +475,62 @@ margin view. The gateway's **own** frames flow through the same batch
 Gateway flash cost sits inside the enlarged OTA slots (partitions
 revised 2026-11-09: 1,920 KB per slot, +64 KB each).
 
+### 10.8 Trek mode — two-device bilateral beacon (`cfgLoRaMode = 2`)
+
+Two paired devices (the mesh PSK **is** the pairing — any frame that
+authenticates with my key is my peer), each with a phone in BLE range.
+Goal: a mutual "still in touch" beacon with **both** positions on both
+phones. No gateway, no server; each phone may still push both tracks to
+the LAN server when one appears.
+
+**Schedule.** The exchange period is the sleep table (`cfgRange` — both
+devices set the same value). Windows anchor to the GPS epoch:
+`window ≡ 0 (mod period)`. Each window has three sub-slots of the §10.4
+slot length (3 s at SF12):
+
+| Sub-slot | Sender | Listener |
+|---|---|---|
+| S0 | **lower** short id | higher id |
+| S1 | higher short id | lower id |
+| S2 | whoever missed their RX re-TXes own frame | the other listens |
+
+* `boot` counter, PSK, profile and `cfgP2PTxPower` are shared config —
+  the role is derived from the short ids, nothing else is provisioned.
+* **Bootstrap**: before the first contact the peer id is unknown — the
+  device assumes the lower-id role (TX S0, RX S1) and **alternates the
+  assumption** on each failed window, so first contact lands within ≤ 2
+  windows. After the first valid frame the peer id is known and the
+  id-order roles are permanent (RTC).
+* **Adaptive power** is per-device, driven by its own RX quality: a
+  missed exchange or a peer frame at RSSI < −115 dBm steps the level
+  **up** the ladder 14 → 17 → 20 → 22 dBm; three consecutive frames at
+  RSSI > −110 dBm step it back down one notch (floor 14). The level
+  persists in RTC RAM and resets to 14 on power cycle.
+* **Contact lost**: 3 consecutive windows without a valid peer frame →
+  the green LED plays a 3× double-blink pattern at each wake (visible
+  with the phone packed away). Any valid frame clears it.
+
+### 10.9 Peer-relay BLE advertisement (trek + future gateway use)
+
+After an exchange each device advertises **two** extended-adv sets for
+`kBeaconDurationMs`: its own §6 beacon (sid 0, unchanged) and a
+**peer-relay** set (sid 1) with the peer's last received frame:
+
+```
+manufacturer data: FF FF FF | 0x02 | origin (4 B BE) | seq (4 B BE) | body (28 B, §1 plaintext)
+```
+
+The leading `0x02` type byte distinguishes it from a plain v1 beacon
+(28-byte manufacturer body). The app tags the body under
+`deviceKey = origin-hex` and derives contact status from the adv's
+freshness — no new GATT, no connection.
+
+### 10.10 What trek mode must never do
+
+* No server dependency: the exchange completes device-to-device.
+* No role config: roles derive from the short ids after first contact.
+* No LoRaWAN frames on the trek profile (same private sync word as §10).
+
 ## 8. Consumer checklist
 
 | Consumer | Must handle |

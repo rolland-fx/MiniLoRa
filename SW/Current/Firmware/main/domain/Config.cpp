@@ -51,8 +51,8 @@ void makeDefaults(const ConfigDefaults &d, DeviceConfig &cfg)
     cfg.cfgBurstIntervalMin = d.cfgBurstIntervalMin; // 0 = runtime default 5
     cfg.cfgBurstMaxPerDay = d.cfgBurstMaxPerDay;     // 0 = runtime default 20
     // P2P (§10): LoRaWAN stays the factory default; a zeroed mesh key
-    // keeps the P2P radio silent even with lora_mode = p2p.
-    cfg.cfgLoRaMode = flag(d.cfgP2P);
+    // keeps the P2P radio silent even with lora_mode != 0.
+    cfg.cfgLoRaMode = d.cfgLoRaMode;
     cfg.cfgP2PRole = flag(d.cfgP2PGateway);
     cfg.cfgP2PProfile = d.cfgP2PProfile > 2 ? uint8_t{0} : d.cfgP2PProfile;
     cfg.cfgP2PRxAfterTx = flag(d.cfgP2PRxAfterTx);

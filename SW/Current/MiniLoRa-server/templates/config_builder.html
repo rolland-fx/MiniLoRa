@@ -82,8 +82,12 @@ WiFi password in clear text — treat it like a credential.</p>
   <input type="number" name="burstMaxPerDay" min="0" max="255" placeholder="Bursts per day (0 = 20)"
          value="{{ form.get('burstMaxPerDay', '20') }}">
 
-  <h2>P2P star (no cloud — ICD §10)</h2>
-  <label><input type="checkbox" name="cfgP2P" {{ 'checked' if form.get('cfgP2P') }}> P2P mode (LoRa raw — no TTN)</label>
+  <h2>P2P (no cloud — ICD §10)</h2>
+  <select name="cfgLoRaMode">
+    <option value="0" {{ 'selected' if form.get('cfgLoRaMode', '0') == '0' }}>LoRaWAN (TTN) — default</option>
+    <option value="1" {{ 'selected' if form.get('cfgLoRaMode') == '1' }}>P2P star (gateway/leaves)</option>
+    <option value="2" {{ 'selected' if form.get('cfgLoRaMode') == '2' }}>Trek (two-device beacon)</option>
+  </select>
   <label><input type="checkbox" name="cfgP2PRole" {{ 'checked' if form.get('cfgP2PRole') }}> Gateway role (leave unchecked for leaf)</label>
   <select name="cfgP2PProfile">
     <option value="0" {{ 'selected' if form.get('cfgP2PProfile', '0') == '0' }}>Long-range SF12 @ 869.525 (default)</option>

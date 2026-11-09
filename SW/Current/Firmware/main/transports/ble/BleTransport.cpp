@@ -141,19 +141,33 @@ void stopNimble()
 
 // ---- beacon -------------------------------------------------------------
 
+void startBeaconAdvertisingMfg(const uint8_t *mfg, size_t mfgLen);
+
 void startBeaconAdvertising(const uint8_t *payload, size_t len)
 {
-    // Manual AD structure: [len][0xFF][company id 0x0059? + payload]
-    // v1 used setManufacturerData(payload) with no company id; keep the raw
-    // payload as the manufacturer data body after the Espressif default id.
-    uint8_t ad[2 + 2 + 28];
+    // v1 manufacturer data: FF FF FF + the raw 28-byte payload (after the
+    // Espressif default company id).
+    uint8_t mfg[3 + 28];
+    size_t mfgLen = 0;
+    mfg[mfgLen++] = 0xFF;
+    mfg[mfgLen++] = 0xFF; // company id LSB (test value, v1 parity)
+    mfg[mfgLen++] = 0xFF; // company id MSB
+    memcpy(mfg + mfgLen, payload, len);
+    mfgLen += len;
+    startBeaconAdvertisingMfg(mfg, mfgLen);
+}
+
+void startBeaconAdvertisingMfg(const uint8_t *mfg, size_t mfgLen)
+{
+    // Manual AD structure: [len][0xFF][manufacturer data]. The length byte
+    // follows the v1 convention (mfgLen - 2) — byte-identical to the old
+    // inline builder for the 28-byte own beacon.
+    uint8_t ad[2 + 2 + 255];
     size_t n = 0;
-    ad[n++] = static_cast<uint8_t>(2 + len - 1);
+    ad[n++] = static_cast<uint8_t>(mfgLen - 2);
     ad[n++] = 0xFF;                      // manufacturer data
-    ad[n++] = 0xFF;                      // company id LSB (test value, v1 parity)
-    ad[n++] = 0xFF;                      // company id MSB
-    memcpy(ad + n, payload, len);
-    n += len;
+    memcpy(ad + n, mfg, mfgLen);
+    n += mfgLen;
 
     ble_gap_ext_adv_params params = {};
     params.own_addr_type = BLE_OWN_ADDR_PUBLIC;
@@ -349,6 +363,43 @@ void BleTransport::beacon(const uint8_t *payload, size_t len, const char *name,
     startBeaconAdvertising(payload, len);
     // Feed the task WDT while blocking (the main task is subscribed for
     // the whole cycle; long single delays starve it).
+    const TickType_t wake = xTaskGetTickCount() + pdMS_TO_TICKS(durationMs);
+    while (xTaskGetTickCount() < wake) {
+        esp_task_wdt_reset();
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+    ble_gap_ext_adv_stop(kExtAdvHandle);
+    stopNimble();
+}
+
+void BleTransport::beaconPeer(const uint8_t *body28, size_t len,
+                              uint32_t peerOrigin, uint32_t peerSeq,
+                              const char *name, uint32_t durationMs)
+{
+    if (!body28 || len == 0 || len > 28) {
+        return;
+    }
+    strncpy(g_name, name, sizeof(g_name) - 1);
+    if (!startNimble()) {
+        return;
+    }
+    // ICD §10.9: FF FF FF | 0x02 | origin BE | seq BE | §1 body — the
+    // leading type byte distinguishes it from a plain 28-byte v1 beacon.
+    uint8_t mfg[3 + 1 + 4 + 4 + 28];
+    size_t n = 0;
+    mfg[n++] = 0xFF;
+    mfg[n++] = 0xFF;
+    mfg[n++] = 0xFF;
+    mfg[n++] = 0x02;
+    for (int i = 0; i < 4; ++i) {
+        mfg[n++] = static_cast<uint8_t>(peerOrigin >> (24 - 8 * i));
+    }
+    for (int i = 0; i < 4; ++i) {
+        mfg[n++] = static_cast<uint8_t>(peerSeq >> (24 - 8 * i));
+    }
+    memcpy(mfg + n, body28, len);
+    n += len;
+    startBeaconAdvertisingMfg(mfg, n);
     const TickType_t wake = xTaskGetTickCount() + pdMS_TO_TICKS(durationMs);
     while (xTaskGetTickCount() < wake) {
         esp_task_wdt_reset();

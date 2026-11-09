@@ -72,12 +72,13 @@ def build_envelope(*, name: str, ssid: str, password: str, ip: str,
                    cfg_burst_max_per_day: int,
                    # P2P star (ICD §10) — schema 5 is emitted only when
                    # any of these deviates from the LoRaWAN defaults
-                   cfg_p2p: bool = False, cfg_p2p_role: bool = False,
+                   cfg_lora_mode: int = 0,  # 0 = LoRaWAN, 1 = P2P star, 2 = trek
+                   cfg_p2p_role: bool = False,
                    cfg_p2p_profile: int = 0, cfg_p2p_rx_after_tx: bool = True,
                    cfg_p2p_short_id: int = 0,
                    cfg_mesh_key: bytes = b"",
                    cfg_p2p_tx_power: int = 0) -> bytes:
-    p2p_wanted = (cfg_p2p or cfg_p2p_role or cfg_p2p_profile or
+    p2p_wanted = (cfg_lora_mode != 0 or cfg_p2p_role or cfg_p2p_profile or
                   cfg_p2p_short_id or len(cfg_mesh_key) == 16 or
                   cfg_p2p_tx_power != 0)
     body = bytearray(BODY_V5 if p2p_wanted else BODY_V4)
@@ -110,7 +111,7 @@ def build_envelope(*, name: str, ssid: str, password: str, ip: str,
         crc = crc16_ccitt(body)
         return b"C" + b"\x04" + bytes(body) + struct.pack("<H", crc)
 
-    body[164] = 1 if cfg_p2p else 0
+    body[164] = 1 if cfg_lora_mode == 1 else (2 if cfg_lora_mode == 2 else 0)
     body[165] = 1 if cfg_p2p_role else 0
     body[166] = cfg_p2p_profile if 0 <= cfg_p2p_profile <= 2 else 0
     body[167] = 1 if cfg_p2p_rx_after_tx else 0

@@ -55,8 +55,9 @@ struct __attribute__((packed)) DeviceConfig {
     uint8_t  cfgAssetHeartbeatH;  // hours between asset heartbeats (0 = 24)
     uint8_t  cfgBurstIntervalMin; // sleep after a motion burst (0 = 5)
     uint8_t  cfgBurstMaxPerDay;   // motion-GPS bursts per day (0 = 20)
-    // ---- v5 addition (P2P star, ICD §10) ----
-    uint8_t  cfgLoRaMode;         // 0 = LoRaWAN (default), 1 = P2P star
+    // ---- v5 addition (P2P star + trek, ICD §10) ----
+    uint8_t  cfgLoRaMode;         // 0 = LoRaWAN (default), 1 = P2P star,
+                                  // 2 = trek (two-device bilateral)
     uint8_t  cfgP2PRole;          // 0 = leaf, 1 = gateway
     uint8_t  cfgP2PProfile;       // 0 = long-range SF12, 1 = SF10, 2 = SF7
     uint8_t  cfgP2PRxAfterTx;     // 1 = open the 2 s command window (default)
@@ -88,9 +89,9 @@ struct ConfigDefaults {
     uint8_t cfgAssetHeartbeatH;   // 0 = 24
     uint8_t cfgBurstIntervalMin;  // 0 = 5
     uint8_t cfgBurstMaxPerDay;    // 0 = 20
-    // P2P star (§10) — defaults applied when the field is absent
-    bool cfgP2P;                  // lora_mode = p2p (default false = LoRaWAN)
-    bool cfgP2PGateway;           // p2p_role = gateway (default leaf)
+    // P2P star / trek (§10) — defaults applied when the field is absent
+    uint8_t cfgLoRaMode;          // 0 = LoRaWAN (default), 1 = star, 2 = trek
+    bool cfgP2PGateway;           // p2p_role = gateway (star only)
     uint8_t cfgP2PProfile;        // 0 = long-range
     bool cfgP2PRxAfterTx;         // default true
     uint32_t cfgP2PShortId;       // 0 = derive from DevEUI

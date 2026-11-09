@@ -65,8 +65,8 @@ fun ConfigScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
     var cfgAssetHeartbeatH by remember { mutableStateOf(DeviceConfig.deviceCfgAssetHeartbeatH.toString()) }
     var cfgBurstIntervalMin by remember { mutableStateOf(DeviceConfig.deviceCfgBurstIntervalMin.toString()) }
     var cfgBurstMaxPerDay by remember { mutableStateOf(DeviceConfig.deviceCfgBurstMaxPerDay.toString()) }
-    // P2P star (ICD §10) — provisioned via the schema-5 envelope
-    var cfgP2P by remember { mutableStateOf(false) }
+    // P2P star / trek (ICD §10) — provisioned via the schema-5 envelope
+    var cfgLoRaMode by remember { mutableStateOf(DeviceConfig.deviceCfgLoRaMode) }
     var cfgP2PRole by remember { mutableStateOf(false) }
     var cfgP2PProfile by remember { mutableStateOf(0) }
     var cfgP2PRxAfterTx by remember { mutableStateOf(true) }
@@ -105,7 +105,7 @@ fun ConfigScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
         DeviceConfig.deviceCfgBurstIntervalMin = cfgBurstIntervalMin.toIntOrNull() ?: 5
         DeviceConfig.deviceCfgBurstMaxPerDay = cfgBurstMaxPerDay.toIntOrNull() ?: 20
         // P2P (§10): kept in DeviceConfig so the editor survives restarts
-        DeviceConfig.deviceCfgP2P = cfgP2P
+        DeviceConfig.deviceCfgLoRaMode = cfgLoRaMode
         DeviceConfig.deviceCfgP2PGateway = cfgP2PRole
         DeviceConfig.deviceCfgP2PProfile = cfgP2PProfile
         DeviceConfig.deviceCfgP2PRxAfterTx = cfgP2PRxAfterTx
@@ -136,7 +136,7 @@ fun ConfigScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
                 cfgAssetHeartbeatH.toIntOrNull() ?: 24,
                 cfgBurstIntervalMin.toIntOrNull() ?: 5,
                 cfgBurstMaxPerDay.toIntOrNull() ?: 20,
-                cfgP2P = cfgP2P,
+                cfgLoRaMode = cfgLoRaMode,
                 cfgP2PRole = cfgP2PRole,
                 cfgP2PProfile = cfgP2PProfile,
                 cfgP2PRxAfterTx = cfgP2PRxAfterTx,
@@ -178,7 +178,7 @@ fun ConfigScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
         (cfg["cfgBurstIntervalMin"] as? Int)?.let { cfgBurstIntervalMin = it.toString() }
         (cfg["cfgBurstMaxPerDay"] as? Int)?.let { cfgBurstMaxPerDay = it.toString() }
         // P2P: absent from pre-schema-5 bodies → editor values kept
-        cfgP2P = cfg["cfgLoRaMode"] == true
+        cfgLoRaMode = (cfg["cfgLoRaMode"] as? Int) ?: 0
         cfgP2PRole = cfg["cfgP2PRole"] == true
         (cfg["cfgP2PProfile"] as? Int)?.let { cfgP2PProfile = it }
         cfg["cfgP2PRxAfterTx"]?.let { cfgP2PRxAfterTx = it == true }
@@ -296,25 +296,31 @@ fun ConfigScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
                 Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
             Checkbox(checked = cfgAssetMode, onCheckedChange = { cfgAssetMode = it })
         }
-        // ---- P2P star (ICD §10) ----
-        Text("P2P star (no TTN — LoRa raw, needs a gateway device)",
+        // ---- P2P star / trek (ICD §10) ----
+        Text("P2P (no TTN — LoRa raw; star needs a gateway, trek is 2 devices)",
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(top = 8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text("P2P mode", style = MaterialTheme.typography.bodyMedium)
-                Checkbox(checked = cfgP2P, onCheckedChange = { cfgP2P = it })
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            listOf("LoRaWAN", "P2P star", "Trek").forEachIndexed { i, label ->
+                OutlinedButton(onClick = { cfgLoRaMode = i },
+                    enabled = true) {
+                    Text(label, style = MaterialTheme.typography.labelSmall,
+                         color = if (cfgLoRaMode == i)
+                             MaterialTheme.colorScheme.primary
+                             else MaterialTheme.colorScheme.onSurface)
+                }
             }
-            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text("Gateway role", style = MaterialTheme.typography.bodyMedium)
-                Checkbox(checked = cfgP2PRole, onCheckedChange = { cfgP2PRole = it })
-            }
+        }
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text("Gateway role (star only)", style = MaterialTheme.typography.bodyMedium)
+            Checkbox(checked = cfgP2PRole, onCheckedChange = { cfgP2PRole = it },
+                     enabled = cfgLoRaMode == 1)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf("Long-range SF12", "Balanced SF10", "Bench SF7")
                 .forEachIndexed { i, label ->
                     OutlinedButton(onClick = { cfgP2PProfile = i },
-                        enabled = cfgP2P) {
+                        enabled = cfgLoRaMode != 0) {
                         Text(label, style = MaterialTheme.typography.labelSmall,
                              color = if (cfgP2PProfile == i)
                                  MaterialTheme.colorScheme.primary
@@ -326,17 +332,18 @@ fun ConfigScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
             Text("Command window after each TX (recommended)",
                 Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
             Checkbox(checked = cfgP2PRxAfterTx,
-                     onCheckedChange = { cfgP2PRxAfterTx = it }, enabled = cfgP2P)
+                     onCheckedChange = { cfgP2PRxAfterTx = it },
+                     enabled = cfgLoRaMode != 0)
         }
         OutlinedTextField(cfgP2PShortId, { cfgP2PShortId = it },
             label = { Text("Short id hex (empty = from DevEUI)") },
-            enabled = cfgP2P, modifier = Modifier.fillMaxWidth())
+            enabled = cfgLoRaMode != 0, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(cfgMeshKey, { cfgMeshKey = it },
             label = { Text("Mesh key — 32 hex chars (required for P2P)") },
-            enabled = cfgP2P, modifier = Modifier.fillMaxWidth())
+            enabled = cfgLoRaMode != 0, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(cfgP2PTxPower, { cfgP2PTxPower = it },
             label = { Text("TX power dBm (0 = 14; up to 22 — legal on 869.525)") },
-            enabled = cfgP2P, modifier = Modifier.fillMaxWidth())
+            enabled = cfgLoRaMode != 0, modifier = Modifier.fillMaxWidth())
         if (cfgAssetMode) {
             Text("Motion sensitivity", style = MaterialTheme.typography.bodySmall)
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {

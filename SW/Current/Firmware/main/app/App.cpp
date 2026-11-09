@@ -39,6 +39,7 @@
 #include "../domain/P2pSchedule.hpp"
 #include "../transports/zigbee/ZigbeeTransport.hpp"
 #include "P2pGateway.hpp"
+#include "P2pTrek.hpp"
 
 namespace minilora {
 
@@ -131,13 +132,17 @@ static bool p2pKeyPresent()
 }
 static bool p2pLeafMode()
 {
-    return flagOn(g_cfg.cfgLoRaMode) && !flagOn(g_cfg.cfgP2PRole) &&
+    return g_cfg.cfgLoRaMode == 1 && !flagOn(g_cfg.cfgP2PRole) &&
            p2pKeyPresent();
 }
 static bool p2pGatewayMode()
 {
-    return flagOn(g_cfg.cfgLoRaMode) && flagOn(g_cfg.cfgP2PRole) &&
+    return g_cfg.cfgLoRaMode == 1 && flagOn(g_cfg.cfgP2PRole) &&
            p2pKeyPresent();
+}
+static bool p2pTrekMode()
+{
+    return g_cfg.cfgLoRaMode == 2 && p2pKeyPresent();
 }
 static uint32_t p2pOriginId()
 {
@@ -616,8 +621,9 @@ void runCycle(bool recovery)
         .cfgRange = 4,
         // P2P star (§10): factory default is LoRaWAN/leaf; a provisioned
         // mesh key via the config envelope switches the radio over.
-        .cfgP2P = false, .cfgP2PGateway = false, .cfgP2PProfile = 0,
+        .cfgLoRaMode = 0, .cfgP2PGateway = false, .cfgP2PProfile = 0,
         .cfgP2PRxAfterTx = true, .cfgP2PShortId = 0, .meshKey = nullptr,
+        .cfgP2PTxPower = 0,
     };
     ConfigStore::initAndLoad(g_cfg, defaults);
     // Bench diagnostic: what config is the cycle actually running? (answers
@@ -1216,6 +1222,25 @@ void runCycle(bool recovery)
             ESP_LOGI(TAG, "p2p slot-aligned sleep %u ms", sleepMs);
         }
     }
+    // P2P trek (§10.8): the wake lands 120 s before the next exchange
+    // window on the period grid (same GPS-budget reasoning as the leaf).
+    if (p2pTrekMode() && !batCritical && !locateNow &&
+        !flagOn(g_cfg.cfgAssetMode) && g_rtcTimeValid) {
+        const uint64_t notBefore =
+            rtcNowMs() + static_cast<uint64_t>(sleepMs) * 1000;
+        const uint64_t windowMs = p2ptrek::nextWindowStartMs(
+            kSleepTableMs[g_cfg.cfgRange], notBefore);
+        const uint64_t wakeMs = windowMs - 120'000;
+        const uint64_t aligned =
+            wakeMs > rtcNowMs() ? wakeMs - rtcNowMs() : 0;
+        if (aligned > 60'000) {
+            sleepMs = static_cast<uint32_t>(
+                aligned > kSleepTableMs[kSleepTableLen - 1]
+                    ? kSleepTableMs[kSleepTableLen - 1]
+                    : aligned);
+            ESP_LOGI(TAG, "trek window-aligned sleep %u ms", sleepMs);
+        }
+    }
     // P2P gateway: this whole wake belongs to the slot grid — the radio
     // windows run here and the deep-sleep arming happens inside.
     if (p2pGatewayMode()) {
@@ -1226,6 +1251,20 @@ void runCycle(bool recovery)
             return; // sleep armed for the next catch/predicted window
         }
         ESP_LOGW(TAG, "gateway wake fell through — leaf-style sleep");
+        return;
+    }
+    // P2P trek (ICD §10.8): the bilateral exchange runs here — own frame,
+    // the peer's frame, the S2 retry, adaptive power, the relay adv and
+    // the deep-sleep arming for the next window.
+    if (p2pTrekMode()) {
+        const p2ptrek::Context tctx{g_cfg, payload, kPayloadSize,
+                                    batCritical};
+        bool slept = false;
+        p2ptrek::wakePhase(tctx, &slept);
+        if (slept) {
+            return; // sleep armed for the next exchange window
+        }
+        ESP_LOGW(TAG, "trek wake fell through — leaf-style sleep");
         return;
     }
     ESP_LOGI(TAG, "sleeping %u ms (bat %u mV, low=%d critical=%d)", sleepMs,

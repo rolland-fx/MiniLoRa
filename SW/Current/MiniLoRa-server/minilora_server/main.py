@@ -603,9 +603,10 @@ def _cfg_from_form(form) -> tuple[bytes, str]:
         cfg_asset_heartbeat_h=byte("assetHeartbeatH", 24),
         cfg_burst_interval_min=byte("burstIntervalMin", 5),
         cfg_burst_max_per_day=byte("burstMaxPerDay", 20),
-        # P2P star (ICD §10) — a schema-5 envelope is emitted only when
-        # these are used, so existing app/fleet flows stay byte-identical
-        cfg_p2p=flag("cfgP2P"), cfg_p2p_role=flag("cfgP2PRole"),
+        # P2P star / trek (ICD §10) — a schema-5 envelope is emitted only
+        # when these are used, so existing app/fleet flows stay byte-identical
+        cfg_lora_mode=int(form.get("cfgLoRaMode", "0") or "0"),
+        cfg_p2p_role=flag("cfgP2PRole"),
         cfg_p2p_profile=byte("cfgP2PProfile", 0),
         cfg_p2p_rx_after_tx=flag("cfgP2PRxAfterTx"),
         cfg_p2p_short_id=int(form.get("cfgP2PShortId", "0") or "0", 16),

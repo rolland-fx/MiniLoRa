@@ -23,6 +23,13 @@ public:
     static void beacon(const uint8_t *payload, size_t len, const char *name,
                        uint32_t durationMs);
 
+    /// Blocking: advertise the PEER's last received §1 body (ICD §10.9) —
+    /// a 0x02-typed manufacturer payload with the peer's origin + seq, so
+    /// the phone draws the peer's track. Same 2.5 s-class duration.
+    static void beaconPeer(const uint8_t *body28, size_t len,
+                           uint32_t peerOrigin, uint32_t peerSeq,
+                           const char *name, uint32_t durationMs);
+
     struct ConfigResult {
         bool written = false;      // a client wrote a config
         DeviceConfig cfg{};

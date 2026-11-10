@@ -19,6 +19,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import co.minilora.app.ui.AppViewModel
 import co.minilora.app.ui.MiniLoRaApp
+import co.minilora.app.ui.screens.HelpScreen
 import co.minilora.app.ui.screens.SettingsScreen
 import co.minilora.app.ui.theme.MiniLoRaTheme
 import co.minilora.app.util.DeviceConfig
@@ -33,6 +34,7 @@ class MainActivity : ComponentActivity() {
 
     private val vm: AppViewModel by viewModels()
     private var showSettings by mutableStateOf(false)
+    private var showHelp by mutableStateOf(false)
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -57,10 +59,12 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MiniLoRaTheme {
-                if (showSettings) {
-                    SettingsScreen(vm, onDone = { showSettings = false })
-                } else {
-                    MiniLoRaApp(vm, onOpenSettings = { showSettings = true })
+                when {
+                    showHelp -> HelpScreen(onDone = { showHelp = false })
+                    showSettings ->
+                        SettingsScreen(vm, onDone = { showSettings = false })
+                    else -> MiniLoRaApp(vm, onOpenSettings = { showSettings = true },
+                                        onOpenHelp = { showHelp = true })
                 }
             }
         }

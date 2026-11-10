@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BluetoothDisabled
 import androidx.compose.material.icons.filled.BluetoothSearching
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SettingsRemote
@@ -31,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import co.minilora.app.ui.screens.ConfigScreen
 import co.minilora.app.ui.screens.DevicesScreen
+import co.minilora.app.ui.screens.HelpScreen
 import co.minilora.app.ui.screens.RemoteScreen
 import co.minilora.app.ui.screens.TrackerScreen
 
@@ -44,7 +46,8 @@ enum class Tab(val label: String, val icon: ImageVector) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MiniLoRaApp(vm: AppViewModel, onOpenSettings: () -> Unit) {
+fun MiniLoRaApp(vm: AppViewModel, onOpenSettings: () -> Unit,
+                onOpenHelp: () -> Unit) {
     var tab by remember { mutableStateOf(Tab.TRACKER) }
     val snackHost = remember { SnackbarHostState() }
     val snack by vm.snack.collectAsState()
@@ -75,6 +78,9 @@ fun MiniLoRaApp(vm: AppViewModel, onOpenSettings: () -> Unit) {
             TopAppBar(
                 title = { Text("MiniLoRa") },
                 actions = {
+                    IconButton(onClick = onOpenHelp) {
+                        Icon(Icons.Filled.HelpOutline, contentDescription = "Help & guide")
+                    }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }

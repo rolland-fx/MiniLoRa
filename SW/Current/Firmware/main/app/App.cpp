@@ -43,6 +43,11 @@
 
 namespace minilora {
 
+// External linkage on purpose: the P2P trek phase (P2pTrek.cpp) checks
+// it to decide whether the window grid is anchorable this wake. Set from
+// GPS / DeviceTimeAns; a power loss clears it (see the time note below).
+RTC_DATA_ATTR bool g_rtcTimeValid = false;
+
 namespace {
 const char *TAG = "app";
 
@@ -81,7 +86,7 @@ RTC_DATA_ATTR uint8_t g_wifiRestoreTo = 0;
 // that time across deep sleep. No accumulator, no wake-type guards:
 // every cycle reads the clock; a power loss clears g_rtcTimeValid and
 // the frame ships an honest epoch 0 until the next anchor.
-RTC_DATA_ATTR bool g_rtcTimeValid = false;
+// (g_rtcTimeValid is defined at external linkage, top of this file.)
 // Field-debugging state (diag v4 bytes 24-27)
 RTC_DATA_ATTR uint8_t g_lastTtff = 255;      // last successful TTFF, s
 RTC_DATA_ATTR uint8_t g_linkMargin = 255;    // LinkCheck margin, dB
@@ -969,7 +974,7 @@ void runCycle(bool recovery)
 
     // ---- phase: LoRaWAN (skipped in P2P mode — one air interface) ----
     bool loraSent = false;
-    if (!p2pLeafMode() && !p2pGatewayMode() &&
+    if (!p2pLeafMode() && !p2pGatewayMode() && !p2pTrekMode() &&
         flagOn(g_cfg.cfgLoRaWAN) && g_cfg.devEUI != 0) {
         LoRaWanTransport lora;
         LoRaWanTransport::Downlink dl;
@@ -1228,8 +1233,13 @@ void runCycle(bool recovery)
         !flagOn(g_cfg.cfgAssetMode) && g_rtcTimeValid) {
         const uint64_t notBefore =
             rtcNowMs() + static_cast<uint64_t>(sleepMs) * 1000;
+        // Clamp the index: cfgRange is a raw u8 from the config envelope
+        // and a corrupt blob must not index past the sleep table.
+        const uint8_t rangeIdx = g_cfg.cfgRange < kSleepTableLen
+                                     ? g_cfg.cfgRange
+                                     : kSleepTableLen - 1;
         const uint64_t windowMs = p2ptrek::nextWindowStartMs(
-            kSleepTableMs[g_cfg.cfgRange], notBefore);
+            kSleepTableMs[rangeIdx], notBefore);
         const uint64_t wakeMs = windowMs - 120'000;
         const uint64_t aligned =
             wakeMs > rtcNowMs() ? wakeMs - rtcNowMs() : 0;
@@ -1250,7 +1260,10 @@ void runCycle(bool recovery)
         if (slept) {
             return; // sleep armed for the next catch/predicted window
         }
-        ESP_LOGW(TAG, "gateway wake fell through — leaf-style sleep");
+        // Fall-through (no key, radio init failure) must still sleep —
+        // returning without arming sleep would spin the device hot.
+        ESP_LOGW(TAG, "gateway wake fell through — plain sleep");
+        prepareSleep(sleepMs);
         return;
     }
     // P2P trek (ICD §10.8): the bilateral exchange runs here — own frame,
@@ -1264,7 +1277,8 @@ void runCycle(bool recovery)
         if (slept) {
             return; // sleep armed for the next exchange window
         }
-        ESP_LOGW(TAG, "trek wake fell through — leaf-style sleep");
+        ESP_LOGW(TAG, "trek wake fell through — plain sleep");
+        prepareSleep(sleepMs);
         return;
     }
     ESP_LOGI(TAG, "sleeping %u ms (bat %u mV, low=%d critical=%d)", sleepMs,

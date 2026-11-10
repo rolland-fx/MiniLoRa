@@ -496,11 +496,19 @@ slot length (3 s at SF12):
 
 * `boot` counter, PSK, profile and `cfgP2PTxPower` are shared config —
   the role is derived from the short ids, nothing else is provisioned.
-* **Bootstrap**: before the first contact the peer id is unknown — the
-  device assumes the lower-id role (TX S0, RX S1) and **alternates the
-  assumption** on each failed window, so first contact lands within ≤ 2
-  windows. After the first valid frame the peer id is known and the
-  id-order roles are permanent (RTC).
+* **Bootstrap**: before the first contact the peer id is unknown — each
+  window the device draws its role **at random** (`esp_random() & 1`).
+  A deterministic shared assumption would keep both devices in
+  lockstep collision forever; the random draw gives ~75% contact per
+  window (primary + S2 retry) and ≥ 98% within three windows. After
+  the first valid frame the peer id is known and the id-order roles
+  are permanent (RTC).
+* **The grid anchors to the GPS epoch** via the RTC-backed system
+  clock (`window ≡ 0 mod period` in GPS-derived Unix time). The
+  pre-window gap (after the GPS fix, before S0) is spent in **light
+  sleep** — ~150 µA, RAM and clock intact; the deep-sleep timer only
+  has to land within the 300 ms re-init margin, the final slot
+  alignment uses the crystal-accurate clock.
 * **Adaptive power** is per-device, driven by its own RX quality: a
   missed exchange or a peer frame at RSSI < −115 dBm steps the level
   **up** the ladder 14 → 17 → 20 → 22 dBm; three consecutive frames at

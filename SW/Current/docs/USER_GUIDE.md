@@ -1,12 +1,13 @@
 # Android App — User Guide
 
-App version 2.0 (Jetpack Compose, Material 3). Requires Android 13+ (minSdk 33).
-The APK is built from `SW/Current/Arduino/Android-MiniLoRa`
+App version 3.0 (Jetpack Compose, Material 3). Requires Android 13+
+(minSdk 33). The APK is built from `SW/Current/Arduino/Android-MiniLoRa`
 (`./gradlew assembleDebug` → `app/build/outputs/apk/debug/app-debug.apk`).
 
 > Bringing up a **blank device** for the first time? Start with
 > [HowToStart.md](../../../HowToStart.md) — this guide covers every tab in
-> depth.
+> depth. The app also ships an in-app **Help & guide** ("?" icon, top bar)
+> that always matches the installed version.
 
 ## Permissions (first launch)
 
@@ -14,9 +15,13 @@ The app asks for **BLUETOOTH_SCAN**, **BLUETOOTH_CONNECT** and
 **ACCESS_FINE_LOCATION**. Grant all three — scanning and the config service
 need them. It will also ask to enable Bluetooth; accept.
 
+> BLE scanning is declared `neverForLocation`: turning the phone's
+> **location services off** does **not** stop beacon reception (the app
+> never derives position from scans — the devices carry GNSS).
+
 ## The four tabs
 
-### 1 · Tracker (home)
+### 1 · Map (home)
 
 Everything about the *data*, not the radio.
 
@@ -25,29 +30,40 @@ Everything about the *data*, not the radio.
   (`BLE`, `TTN`, `WiFi`, …) telling you which channel delivered it, and how
   **old** it is (`just now`, `4 min ago`, …). If the device has been
   configured over BLE at least once, a second line shows its live status:
-  `fw 2.6.14 · bat 4021 mV · joined=true · gpsFails=0` — including warnings
+  `fw 3.0.0 · bat 4021 mV · joined=true · gpsFails=0` — including warnings
   like `[LOW BAT]` or `[RECOVERY]`.
-- **Map** — osmdroid/OpenStreetMap with the last 10 valid positions; the
-  newest is the opaque marker. Needs internet for tiles.
+- **Per-device color tracks** — one color per identity (the remembered
+  tracker is blue; peers follow: green, purple, orange…), drawn as a
+  polyline with fading dots. Filter chips above the map select a device or
+  group — each chip carries its track color as a legend dot.
+- **Trek peer contact card** (trek mode) — the peer's latest relayed
+  telemetry (sats, battery, temperature), who relayed it, and an
+  **IN TOUCH / CONTACT LOST** state (lost = 3 missed exchange windows,
+  mirroring the device's LED signal).
 - **History** — swipeable strip of recent payloads (newest right). Each card
-  shows temp/hum/pressure, time, source and coordinates.
+  shows the device name, temp/hum/pressure, time, source and coordinates.
 
-*Data sources:* the **Scan** tab (BLE beacon reception) and the **Remote**
+*Data sources:* the **Devices** tab (BLE beacon reception) and the **Remote**
 tab (TTN/WiFi polling) both feed this screen — and every TTN/WiFi pull also
-**backfills the last ~10 frames** from the network, so the history covers
-cycles that arrived while the app was closed. History is persisted on the
-phone and survives restarts.
+**backfills recent frames** from the network, so the history covers cycles
+that arrived while the app was closed. Frames from different feeds that
+belong to the same device wake merge into ONE card showing all sources.
+History is persisted on the phone and survives restarts.
 
-### 2 · Scan
+### 2 · Devices
 
-The beacon scanner. Press scan (or just wait) — the tracker's BLE beacon
-(coded PHY, every 625 ms) is parsed and only devices with a **valid MiniLoRa
-frame** are listed, with RSSI and last-seen. **Tap a device to select it** as
-the target for configuration and status reads. The selected device is marked ✓.
+The BLE scan. It runs whenever the app is open (battery-balanced) — every
+MiniLoRa advertisement in range is parsed and listed with **signal quality**
+(excellent / good / weak) and last-seen. Tap a device to make it the target
+for Setup and status reads (a snackbar confirms, with **Undo**). A trek
+device shows a `relaying peer XXXXXXXX` badge when it is relaying its
+buddy's position. Devices not heard for 60 s drop off the list.
 
 > The beacon is a telemetry transmitter, not a config advertisement — you do
-> *not* need to "connect" to it. Provision (Provision tab) is a separate GATT
-> service the device opens when you long-press its button.
+> *not* need to "connect" to it. Provisioning (Setup tab) is a separate GATT
+> service the device opens when you long-press its button. The config
+> advertisement is listed too, so the device is visible exactly when you
+> need it.
 
 ### 3 · Remote
 
@@ -91,19 +107,21 @@ touches the phone's radios.
   telemetry frame's sleep-minutes byte). LoRaWAN is always on, and the
   long-press BLE config always works — these toggles can never lock you out.
 
-### 4 · Provision
+### 4 · Setup
 
-The device editor. Requires a **selected device** (Scan tab) and the
-tracker sitting in its **BLE config window** — hold the button ≥ 3 s (the
-device wakes with a 120 s window). Then:
+The device editor, organized as **sectioned cards** — radio mode first (it
+decides which fields exist), then credentials, sensors, power. Requires a
+**selected device** (Devices tab) and the tracker sitting in its **BLE
+config window** — hold the button ≥ 3 s (the device wakes with a 120 s
+window). Then:
 
-- **Read** — chains a status read (battery, counters, joined) and a config
-  read; the editor fields are populated from the device.
-- **Write to device** — builds the 164-byte body from the fields and sends it
-  inside the ICD v4 CRC-protected envelope. A corrupted write is rejected by
-  the device, never half-applied.
-- **Export .cfg** — saves the editor state as the device's native 168-byte
-  envelope file (via the Android file picker, e.g. `minilora-<name>.cfg`).
+- **Read from device** — chains a status read (battery, counters, joined)
+  and a config read; the editor fields are populated from the device.
+- **Write to device** — builds the body from the fields and sends it inside
+  the ICD CRC-protected envelope (schema 4 = 168 B, schema 5 with P2P =
+  193 B). A corrupted write is rejected by the device, never half-applied.
+- **Export .cfg** — saves the editor state as the device's native envelope
+  file (via the Android file picker, e.g. `minilora-<name>.cfg`).
   Read first to mirror the device; the file contains the TTN keys and WiFi
   password in clear text — treat it like a credential.
 - **Import .cfg** — pick a `.cfg` file (generated by the app itself or the
@@ -111,21 +129,34 @@ device wakes with a 120 s window). Then:
   editor fills with its values — review, then **Write to device**.
   Nothing is written until you press Write. This is the device-cloning
   path: Read A → Export → Import on B → Write.
-- **Save** (implicitly on Read/Write/Export/Import) — keeps everything in
-  encrypted prefs.
+- Everything is kept in encrypted prefs (survives restarts).
 
-Fields: device name, WiFi SSID/password/server IP + port (optional WiFi
-transport), JoinEUI/DevEUI/AppKey/NwkKey (LoRaWAN OTAA), transport toggles
-(LoRaWAN, WiFi, GNSS, BME280, OPT3001, LIS3DH, BLE beacon, Zigbee), the
-sleep duration slider (1 min … 120 min), and the **Asset mode (P5)** block:
+**The cards:**
 
-- **Wake on motion** — the tracker sleeps until the accelerometer detects
-  movement (or the heartbeat timer). A motion wake forces a GPS fix and a
-  report, then it re-reports at the burst interval for as long as motion
-  keeps triggering (capped per day); between bursts it sends cheap
-  heartbeats carrying the last known position.
-- **Sensitivity** Low/Med/High ≈ 128/256/512 mg; **Heartbeat hours**,
-  **Burst minutes** and **Bursts/day** tune the schedule.
+- **Target device** — shows the current selection (set on the Devices tab).
+- **Radio mode** — a three-way choice with a one-line explainer each:
+  - **LoRaWAN** (default) — via TTN; shows the JoinEUI/DevEUI/AppKey/NwkKey
+    credential card.
+  - **P2P star** — no cloud: this device TXes raw LoRa to a powered gateway
+    which forwards to your LAN server. Shows the **gateway role** switch,
+    the air profile (Long-range SF12 / Balanced SF10 / Bench SF7), the
+    command-window switch, and the **mesh key** (32 hex — the private
+    network's shared secret).
+  - **Trek** — no cloud at all: two devices exchange positions every wake;
+    both phones show both tracks. Same air-profile + mesh-key fields.
+- **Wi-Fi & server** — SSID/password and the MiniLoRa-server IP+port (also
+  used for OTA), in every radio mode.
+- **Sensors & transports** — a switch grid (GNSS, BME280, OPT3001, LIS3DH,
+  BLE beacon, Zigbee, LoRaWAN uplink, Wi-Fi push).
+- **Power & behavior** — the wake-interval slider (1 min … 120 min) and the
+  **Asset mode (P5)** block:
+  - **Wake on motion** — the tracker sleeps until the accelerometer detects
+    movement (or the heartbeat timer). A motion wake forces a GPS fix and a
+    report, then it re-reports at the burst interval for as long as motion
+    keeps triggering (capped per day); between bursts it sends cheap
+    heartbeats carrying the last known position.
+  - **Sensitivity** Low/Med/High ≈ 128/256/512 mg; **Heartbeat hours**,
+    **Burst minutes** and **Bursts/day** tune the schedule.
 
 Typical asset settings: Med sensitivity, 24 h heartbeat, 5 min bursts,
 20/day — years of idle battery life.
@@ -152,7 +183,7 @@ Everything is stored in encrypted prefs.
 - **Import settings** — pick a settings file; it is validated (type +
   version), merged into the current settings and saved. Unknown keys are
   ignored (forward-compatible). This never touches the tracker — device
-  configuration travels separately in the Provision tab (.cfg).
+  configuration travels separately in the Setup tab (.cfg).
 
 > The settings file contains the **TTN API key in clear text** — treat it
 > like a credential.
@@ -161,13 +192,20 @@ Everything is stored in encrypted prefs.
 
 **Provision a fresh tracker**
 1. Flash it (see [FLASHING.md](FLASHING.md)), hold the button ≥ 3 s.
-2. Scan tab → select it. Provision tab → fill JoinEUI/DevEUI/keys from your
-   TTN console → **Write**.
+2. Devices tab → select it. Setup tab → **Read from device**, fill
+   JoinEUI/DevEUI/keys from your TTN console → **Write to device**.
 3. Done — it rejoins and reports on the next cycle. (TTN → device → check
    "Latest uplink".)
 
+**Provision a trek pair**
+1. Both devices: Setup tab → Radio mode **Trek**, the **same mesh key**,
+   the same air profile and the same wake interval.
+2. Power both outdoors — first contact lands within 1–3 windows; each map
+   then draws its own track (blue) and the peer's (green), with the
+   contact card showing IN TOUCH.
+
 **Mount it and forget it**
-1. Enable Zigbee in Config only if you run a coordinator (optional).
+1. Enable Zigbee in Setup only if you run a coordinator (optional).
 2. Remote tab → enable TTN polling (phone) and note the diag cadence
    (~every 16 boots).
 3. Later: Remote → **Locate now** to find it, **Send diag** to check its
@@ -177,15 +215,16 @@ Everything is stored in encrypted prefs.
 1. Remote → **Open BLE window** → within its next wake cycle the device
    advertises the config service for 120 s.
 2. Walk up to it, long-press is *not* needed — wait for the window, use the
-   Provision tab as usual. (Or long-press if you can reach it.)
+   Setup tab as usual. (Or long-press if you can reach it.)
 
 ## Troubleshooting
 
 | Symptom | Cause / fix |
 |---|---|
-| Nothing in Scan tab | Tracker asleep between cycles (normal — beacon only during the awake window) or BT off / permissions missing. Scan over ≥ 2 cycles or raise the sleep frequency temporarily. |
+| Nothing on Devices tab | Tracker asleep between cycles (normal — beacon only during the awake window) or BT off / permissions missing. Wait over ≥ 2 cycles or raise the wake frequency temporarily. |
 | Config write fails | Device not in config window (long-press ≥ 3 s), wrong target MAC, or out of range. The CRC path rejects corrupted writes — retry; a *rejected* write changes nothing. |
 | Remote tab empty | TTN not configured, wrong region, or API key without downlink/uplink-read rights. Check device ID. |
-| No GPS fix ever | Indoor (the firmware backs GPS off to every 8th cycle automatically — wait for an outdoor cycle, or use **Locate now** outdoors). |
+| No GPS fix ever | Indoor (the firmware backs GPS off automatically — wait for an outdoor cycle, or use **Locate now** outdoors). |
 | `joined=false` in status | Device lost power (session lives in RTC RAM) — it rejoins on the next cycle; also verify keys. |
 | Map empty | All history entries have `0,0` (never had a fix) — the app skips zero coordinates. |
+| Trek peer shows CONTACT LOST | 3 missed windows (out of range, or the peer's battery died). The device's green LED triple-double-blinks too; any received frame clears it. |

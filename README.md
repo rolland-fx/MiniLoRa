@@ -106,9 +106,15 @@ Design with FreeCad 1.0
 LoRaWAN uplink/downlink reference, Zigbee/Home-Assistant integration.
 The byte-level wire contract lives in [`SW/Current/ICD.md`](SW/Current/ICD.md).
 
-**Firmware (ESP-IDF, v2.6.x)** — remote configuration over LoRa downlink
-(transports, sensors, sleep duration), OTA updates with WiFi force+restore,
-wake-on-motion asset mode, store-and-forward buffer, bounded logs.
+**Firmware (ESP-IDF, v3.0)** — everything 2.6 had (remote configuration
+over LoRa downlink, OTA with WiFi force+restore, wake-on-motion asset
+mode, store-and-forward buffer, bounded logs) **plus two cloud-free radio
+modes**: **P2P star** (a powered gateway forwards leaves' raw-LoRa frames
+to the server — no TTN, no subscriptions) and **trek** (two devices
+exchange positions directly and relay each other over BLE, so both phones
+map both tracks — no infrastructure at all). Frame security: AES-CTR
+bodies + CMAC with a boot-anchored IV; 4-step TX-power ladder (up to
++22 dBm, legal on 869.525 MHz).
 
 **Server (FastAPI + SQLite)** — WiFi push + TTN poller ingestion, graphed
 web UI (per-page routes, grouped devices, range selectors), remote
@@ -157,16 +163,23 @@ each with its own decision log. The distilled state:
 
 **Already done** (struck from every wishlist): remote config over LoRa
 downlink, OTA with WiFi force+restore, wake-on-motion asset mode (all in
-fw 2.6.16), bounded logs + 100 MB-capped database, Docker + Proxmox LXC
+fw 2.6.x), bounded logs + 100 MB-capped database, Docker + Proxmox LXC
 deployment, the self-made ESP32-C6-MINI-1 board, the CN3165 solar
-charger, repo reorganization and the public release.
+charger, repo reorganization and the public release — and, in fw 3.0 /
+app 3.0 / server 2026-11: **P2P star + trek radio modes**, delivery
+ratio + battery projection + missed-cycle analytics, the reworked app UI
+(Map / Devices / Remote / Setup + in-app Help), and full reliability
+passes over all three components.
 
 **Next moves — hardware** (gated by the §5 prototype-first rule):
 
-1. **Bench session on a Wio-S3 dev board**: firmware port + deep-sleep
+1. **Bench validation of the 3.0 stack** — trek pair (first contact,
+   both-tracks mapping, power ladder, contact-lost LED), P2P gateway
+   (2-leaf forward), battery numbers with the trek light-sleep gap. This
+   validates the last four days of FW/app/server work before anything
+   else stacks on it.
+2. **Bench session on a Wio-S3 dev board**: firmware port + deep-sleep
    current measurement — the go/no-go for the next PCB (§1.4, §1.6).
-2. **LIS3DH wake→read timing check** (the constant-133 question) —
-   load-bearing for asset mode (§5.3).
 3. **Asset-mode field test**: shake test, `wake=motion` burst cycle,
    battery slope before/after (§5.3).
 4. **Wio-S3 datasheet answers**: 2.4 GHz antenna routing + which RTC
@@ -183,8 +196,10 @@ charger, repo reorganization and the public release.
 4. Then the sensor-analytics menu: dew point, pressure trend, geofences,
    odometer, motion index.
 
-**Next moves — app**: local notifications (no-data / low-battery /
-geofence), then the captive-portal first config (Next-AP-Initial.md).
+**Next moves — app**: surface the server's `/api/analytics` health cards
+(delivery ratio / battery days-to-critical / missed cycles) in the app,
+local notifications (no-data / low-battery / geofence), then the
+captive-portal first config (Next-AP-Initial.md).
 
 Still open on the hardware wishlist: JST 2.0 → PH1.25 battery connector,
 1.25 mm-pitch external connector, better thermal isolation for the BME280.

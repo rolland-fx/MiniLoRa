@@ -6,10 +6,27 @@ after the first firmware flash.
 
 > **What "blank" means:** erased NVS — no WiFi credentials, no LoRaWAN keys,
 > no name. The tracker cannot report anywhere until you provision it.
-> If your device runs firmware **2.6.13 or older**, update it first (see
-> [FLASHING.md](SW/Current/docs/FLASHING.md)).
+> If your device runs firmware **older than 3.0**, update it first (see
+> [FLASHING.md](SW/Current/docs/FLASHING.md) — the 3.0 partition layout
+> changed, so flash over USB once even if OTA worked before).
 
 ---
+
+## 0 · Pick a radio mode (FW ≥ 3.0)
+
+The device has **three** radio modes, chosen in the app's **Setup** tab
+(they can be changed later, any number of times):
+
+| Mode | Needs | Range | Use it for |
+|---|---|---|---|
+| **LoRaWAN** (default) | a TTN (or other LNS) registration | wherever gateways are | the classic tracker: server + dashboards + remote commands |
+| **P2P star** | one **powered** MiniLoRa as the gateway, a private **mesh key** | kilometers (SF12), line-of-sight | no subscriptions, no internet: the gateway forwards leaves' frames to your LAN server |
+| **Trek** | a **second** MiniLoRa with the same mesh key + period | direct device-to-device | hiking/pair tracking with **no infrastructure at all** — both phones show both tracks |
+
+This guide continues with the default **LoRaWAN** path. For P2P star or
+trek, provision the same way (steps 3–4) but fill the **Radio mode** card
+instead of the LoRaWAN keys — see [ICD §10](SW/Current/ICD.md) for the
+protocol and the app's in-app **Help** for a guided tour.
 
 ## 1 · What you need
 
@@ -17,7 +34,7 @@ after the first firmware flash.
 |---|---|
 | The tracker (battery disconnected or switch off) | power comes last |
 | **Android phone** with the MiniLoRa app (see [USER_GUIDE.md](SW/Current/docs/USER_GUIDE.md)) | provisioning runs over BLE; **Android 13+** |
-| Your **TTN console** (or LoRaWAN network server) with a registered device | you will copy the JoinEUI / DevEUI / AppKey / NwkKey from here |
+| Your **TTN console** (or LoRaWAN network server) with a registered device | you will copy the JoinEUI / DevEUI / AppKey / NwkKey from here (LoRaWAN mode) |
 | The **MiniLoRa-server** reachable from the tracker's WiFi (LAN IP, e.g. `192.168.1.100:5000`) | where the readings land; TTN also forwards if you prefer |
 | WiFi 2.4 GHz credentials | the tracker is a 2.4 GHz-only station |
 
@@ -45,16 +62,20 @@ Keep them secret: the keys *are* the device's identity.
 
 ## 4 · Provision from the app
 
-1. **Scan tab** → wait for the tracker's beacon → **tap it** to select it as
-   the target.
-2. **Provision tab** → fill in:
+1. **Devices tab** → wait for the tracker's beacon → **tap it** to select it
+   as the target (a snackbar confirms; Undo if you tapped the wrong one).
+2. **Setup tab** → **Read from device** first (loads its current config),
+   then fill in:
+   - **Radio mode** — LoRaWAN (this guide), P2P star, or Trek; the fields
+     below adapt to the choice
    - **Device name** — what the server keys your data by (e.g. `MiniLoRa-FX-1`)
-   - **WiFi SSID / password** — 2.4 GHz network the tracker can reach
+   - **Wi-Fi SSID / password** — 2.4 GHz network the tracker can reach
    - **Server IP + port** — your MiniLoRa-server (LAN IP, default port 5000)
-   - **JoinEUI / DevEUI / AppKey / NwkKey** — from step 2
-   - **Sleep duration** — 15 min is a good start; shorter cycles cost battery
-   - Transports/sensors — leave everything ON except **Zigbee** unless you
-     run a coordinator
+   - **LoRaWAN credentials** (LoRaWAN mode) — JoinEUI / DevEUI / AppKey /
+     NwkKey from step 2
+   - **Wake interval** — 15 min is a good start; shorter cycles cost battery
+   - Sensors — leave everything ON except **Zigbee** unless you run a
+     coordinator
 3. **Write to device.** The write is CRC-protected: a corrupted write is
    rejected by the device, never half-applied. The tracker saves it to NVS
    and starts its normal cycle immediately.
@@ -64,9 +85,10 @@ Keep them secret: the keys *are* the device's identity.
 
 ## 5 · Verify
 
-1. **App → Remote tab**: after the tracker's next wake, the *Diagnostics*
-   card fills in (fw version, boot count, `joined`, config flags) and the
-   *Downlink queue* card tracks any commands you send.
+1. **App → Map tab**: after the tracker's next wake, the status header
+   fills in (temperature, battery, coordinates, age) and the history strip
+   starts. **Remote tab**: the *Diagnostics* card shows fw version, boot
+   count, `joined` and config flags.
 2. **TTN console** → device → *Latest uplink*: fPort-1 telemetry arriving.
 3. **Server** → `http://<server>:5000/device/<name>`: the hero cards,
    charts and map populate — including both identities if the tracker
@@ -90,11 +112,12 @@ indoors (the firmware backs GPS off automatically when it can't see the sky;
 
 | Symptom | Fix |
 |---|---|
-| Provision tab finds nothing | Not in config window (long-press ≥ 3 s), wrong target in the Scan tab, or Bluetooth permission missing |
+| Setup tab finds nothing | Not in config window (long-press ≥ 3 s), wrong target on the Devices tab, or Bluetooth permission missing |
 | Write rejected | Out of range or window closed — retry; a rejected write changes nothing |
 | No TTN traffic | Keys/JoinEUI mistyped (most common), or the device is indoors with a bad antenna angle — check the diag frame's `lora_join_failures` |
 | Server sees nothing | Wrong server IP/port, tracker and server on different subnets, or WiFi credentials wrong — the diag's `wifi_failures` counter tells you |
 | Everything looks right but no data | Check **Remote config** in the app: WiFi and LoRaWAN must be ON (they are remote-togglable) |
+| Trek pair never makes contact | Both devices need the **same** mesh key, profile and wake interval, and each needs a GPS fix (the schedule anchors to GPS time) — first contact lands within 1–3 windows |
 
 ## Deep details
 
@@ -107,5 +130,5 @@ indoors (the firmware backs GPS off automatically when it can't see the sky;
 ## Screenshots (Android app)
 
 > **TODO — screenshots to add** to `docs/screenshots/` (see the root
-> README table): `app-tracker.png`, `app-graphs.png`, `app-remote.png`,
-> `app-provision.png`.
+> README table): `app-map.png`, `app-graphs.png`, `app-remote.png`,
+> `app-setup.png`.

@@ -3,6 +3,9 @@
 *Written 2026-11-05, from a "what else could we compute, given sensor / memory /
 flash / CPU?" session. Nothing here is implemented yet except where marked —
 the wake-on-motion section documents code that is **already shipped**.*
+*Updated 2026-11-11: the trek/P2P release (fw 3.0) shipped alongside it —
+per-device map tracks, the trek peer contact card and the in-app Help are
+app items now done; the P2P battery model (light-sleep gap) is in the FW.*
 
 ## Ground rules (where the real constraints are)
 
@@ -95,6 +98,7 @@ All derivable from frames **already stored**. Ranked loosely by value/effort.
 | Idea | Value |
 |---|---|
 | **Local notifications** from the poller: no-data-24 h, low battery, geofence exit, temperature extremes | the app has all data + a background loop; it just never *alerts* |
+| **Surface the server's `/api/analytics` health cards** (delivery ratio, battery days-to-critical, missed cycles, ⚠ warnings) in the Remote tab — the server computes them; the app doesn't show them yet | the ⚠ strip reaches the phone |
 | Phone-barometer cross-check when BLE-near (floor-level altitude); phone-GPS vs device-GPS accuracy comparison during bench tests | sensor fusion for free |
 | Home-screen widget (latest card) | glanceable tracker state |
 | Range export/share (CSV/PDF) from a picked window | server already has CSV; the app could reuse its own history |

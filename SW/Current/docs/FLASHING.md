@@ -41,6 +41,12 @@ idf.py -p /dev/ttyACM0 flash monitor
   coming from a different partition layout — `idf.py flash` does this
   automatically, but a manual `esptool write-flash 0x20000 minilora.bin`
   alone leaves the device unbootable ("No bootable app partitions").
+- ⚠️ **FW 3.0 changed the partition layout** (OTA slots widened to
+  `0x1E0000` each by shrinking `zb_storage`/`coredump` to 64 KB): any
+  2.6.x device must be flashed over USB **once** (all three images) to
+  adopt it — OTA between 2.6 and 3.0 across the old layout will not work.
+  Provisioning data in NVS survives the flash; the LoRaWAN session does
+  not (one rejoin on the next cycle).
 - ⚠️ Opening the port can reset the chip (USB-Serial-JTAG reacts to DTR):
   assert DTR/RTS **low before** `open()` in your capture scripts, and
   expect the port to vanish whenever the device is in deep sleep — it is
@@ -72,8 +78,9 @@ idf.py -p /dev/ttyACM0 flash monitor
   4/s, all logging `esp_reset_reason` 11 (`ESP_RST_USB`).
 - Exit monitor with `Ctrl-]`.
 
-**Build sanity:** the app binary must fit the `0x1D0000` OTA slot; the build
-prints the headroom (v2.3.0 ≈ 1.8 MB, ~4 % free).
+**Build sanity:** the app binary must fit the `0x1E0000` OTA slot (3.0
+layout, 1,920 KB); the build prints the headroom (fw 3.0.0 ≈ 1.9 MB,
+~5 % free).
 
 ## 3. Backup & restore (do this BEFORE touching an existing device)
 

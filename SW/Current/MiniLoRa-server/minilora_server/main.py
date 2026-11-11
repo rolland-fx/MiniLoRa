@@ -1213,8 +1213,8 @@ async def ota_upload(request: Request,
     """Upload a .bin (idf.py build output). Activate it separately."""
     check_push_token(request, token)
     data = await file.read()
-    if len(data) < 100_000 or len(data) > 0x1D0000:
-        raise HTTPException(400, f"implausible size {len(data)} (slot is 0x1D0000)")
+    if len(data) < 100_000 or len(data) > 0x1E0000:
+        raise HTTPException(400, f"implausible size {len(data)} (slot is 0x1E0000)")
     sha = hashlib.sha256(data).hexdigest()
     # empty/omitted device_id = NULL = any device may pull this image
     # (the device checks /ota/check as its EUI — see find_update)

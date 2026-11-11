@@ -14,7 +14,7 @@ accepts today, and the device reboots into its normal cycle.
 
 | Resource | Budget | Portal cost | Verdict |
 |---|---|---|---|
-| **Flash (per OTA slot)** | `ota_0`/`ota_1` = 0x1D0000 = 1,900,544 B each; current bin (2.6.12) 1,849,744 B → **50.8 KB free per slot** | **+12–18 KB** total (see breakdown below) | ✅ ~30 KB margin |
+| **Flash (per OTA slot)** | `ota_0`/`ota_1` = 0x1E0000 = 1,966,080 B each (fw 3.0 layout); current bin (3.0.0) ≈ 1,866,000 B → **~100 KB free per slot** | **+12–18 KB** total (see breakdown below) | ✅ ~70 KB margin |
 | **RAM (D/IRAM)** | 226 KB free of 452 KB (idf_size, 2.6.12 map) | SoftAP ~25–30 KB + NimBLE (already resident in config mode) ~35 KB + minimal HTTP ~1 KB | ✅ both stacks run concurrently |
 
 Flash cost breakdown (the design keeps it small on purpose):
@@ -47,10 +47,10 @@ Partition table for reference (4 MB flash, ESP32-C6):
 nvs        0x9000   0x6000
 phy_init   0xf000   0x1000
 otadata   0x10000   0x2000
-ota_0     0x20000  0x1D0000
-ota_1    0x1F0000  0x1D0000
-zb_storage 0x3C0000 0x20000
-coredump   0x3E0000 0x20000
+ota_0     0x20000  0x1E0000   (fw 3.0 layout)
+ota_1     0x200000 0x1E0000
+zb_storage 0x3E0000 0x10000
+coredump   0x3F0000 0x10000
 ```
 
 ---

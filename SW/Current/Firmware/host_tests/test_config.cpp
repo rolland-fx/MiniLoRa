@@ -36,7 +36,7 @@ static void test_serialize_deserialize_roundtrip()
 
     uint8_t blob[kConfigSize + 3];
     CHECK_EQ(serializeConfig(in, blob), kConfigSize + 3);
-    CHECK_EQ(blob[0], 3); // NVS schema 3 = v4 struct + trailing CRC16
+    CHECK_EQ(blob[0], 5); // NVS schema 5 = full struct + trailing CRC16
     // Blob must be tamper-evident: flipping any body byte breaks the load.
     DeviceConfig out{};
     CHECK(deserializeConfig(blob, sizeof(blob), out));
@@ -70,11 +70,13 @@ static void test_v4_envelope_with_asset_fields()
     in.cfgBurstIntervalMin = 2;
     in.cfgBurstMaxPerDay = 10;
 
+    // Schema-4 body = the first 164 bytes of the 189-byte struct (the P2P
+    // tail is truncated away) — memcpy only the body the envelope carries.
     uint8_t env[kConfigWriteV4Size] = {};
     env[0] = kConfigWriteMagic;
     env[1] = 4;
-    std::memcpy(env + 2, &in, kConfigSize);
-    const uint16_t crc = crc16Ccitt(env + 2, kConfigSize);
+    std::memcpy(env + 2, &in, kConfigBodyV4Size);
+    const uint16_t crc = crc16Ccitt(env + 2, kConfigBodyV4Size);
     env[kConfigWriteV4Size - 2] = crc & 0xFF;
     env[kConfigWriteV4Size - 1] = crc >> 8;
 
@@ -86,6 +88,24 @@ static void test_v4_envelope_with_asset_fields()
     CHECK_EQ(static_cast<int>(out.cfgAssetHeartbeatH), 12);
     CHECK_EQ(static_cast<int>(out.cfgBurstIntervalMin), 2);
     CHECK_EQ(static_cast<int>(out.cfgBurstMaxPerDay), 10);
+    // The P2P tail is absent from schema 4: zero-filled (LoRaWAN default).
+    CHECK_EQ(static_cast<int>(out.cfgLoRaMode), 0);
+
+    // Schema-5 envelope: the full 189-byte struct rides — round-trip keeps
+    // the P2P fields too.
+    uint8_t env5[kConfigWriteV5Size] = {};
+    env5[0] = kConfigWriteMagic;
+    env5[1] = 5;
+    std::memcpy(env5 + 2, &in, kConfigSize);
+    in.cfgLoRaMode = 2;
+    std::memcpy(env5 + 2, &in, kConfigSize);
+    const uint16_t crc5 = crc16Ccitt(env5 + 2, kConfigSize);
+    env5[kConfigWriteV5Size - 2] = crc5 & 0xFF;
+    env5[kConfigWriteV5Size - 1] = crc5 >> 8;
+    DeviceConfig out5{};
+    CHECK(parseConfigWrite(env5, sizeof(env5), out5));
+    CHECK_EQ(static_cast<int>(out5.cfgLoRaMode), 2);
+    CHECK_EQ(static_cast<int>(out5.cfgAssetMode), 1);
 
     // Schema-3 envelope still parses: the asset tail zero-fills.
     uint8_t env3[kConfigWriteV3Size] = {};
@@ -133,6 +153,10 @@ static void test_make_defaults_parses_ip()
         .cfgAssetMode = false, .cfgMotionSens = 2,
         .cfgAssetHeartbeatH = 24, .cfgBurstIntervalMin = 5,
         .cfgBurstMaxPerDay = 20,
+        // P2P star / trek (§10) — defaults: LoRaWAN, radio silent
+        .cfgLoRaMode = 0, .cfgP2PGateway = false, .cfgP2PProfile = 0,
+        .cfgP2PRxAfterTx = true, .cfgP2PShortId = 0, .meshKey = nullptr,
+        .cfgP2PTxPower = 0,
     };
     DeviceConfig cfg{};
     makeDefaults(d, cfg);
@@ -142,6 +166,9 @@ static void test_make_defaults_parses_ip()
     CHECK_EQ(std::strcmp(cfg.globalName, "MiniLoRa-Test"), 0);
     CHECK_EQ(static_cast<int>(cfg.cfgGNSS), 1);
     CHECK_EQ(static_cast<int>(cfg.cfgWiFi), 0);
+    // P2P defaults: mode 0 (LoRaWAN), no key -> the P2P radio stays silent
+    CHECK_EQ(static_cast<int>(cfg.cfgLoRaMode), 0);
+    CHECK_EQ(static_cast<int>(cfg.cfgP2PRxAfterTx), 1);
 }
 
 static void test_crc16_ccitt()

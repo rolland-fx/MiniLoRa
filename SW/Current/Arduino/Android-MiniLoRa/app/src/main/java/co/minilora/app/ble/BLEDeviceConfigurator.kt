@@ -154,6 +154,11 @@ class BLEDeviceConfigurator(private val context: Context) {
     private var gatt: BluetoothGatt? = null
     private var characteristic: BluetoothGattCharacteristic? = null
     private var statusCharacteristic: BluetoothGattCharacteristic? = null
+    // MTU handshake: set false before requestMtu(247), true on
+    // onMtuChanged (or on request refusal). Armed ops wait for it so the
+    // first read/write never races the negotiation.
+    @Volatile
+    private var mtuReady = true
     var onReadComplete: ((ByteArray) -> Unit)? = null
     var onWriteComplete: ((Boolean) -> Unit)? = null
     var onStatusRead: ((ByteArray) -> Unit)? = null
@@ -194,7 +199,26 @@ class BLEDeviceConfigurator(private val context: Context) {
                 onConnectionState?.invoke(false)
                 return
             }
+            // MTU negotiation (B2): the default ATT MTU is 23 (20 usable
+            // bytes per write). The config envelope is 163/168/193 B —
+            // without a negotiated MTU, OEM stacks truncate the write or
+            // queue a long write the ESP32 GATT server rejects as
+            // "config write rejected (N bytes)". 247 covers the largest
+            // envelope in one ATT payload; the device-side ATT server
+            // accepts up to its buffer (kConfigWriteMaxSize).
+            mtuReady = false
+            if (!gatt.requestMtu(247)) {
+                // Some stacks refuse the request when busy — proceed
+                // anyway (the old behavior) rather than deadlocking.
+                Log.w(TAG, "requestMtu rejected — proceeding with default")
+                mtuReady = true
+            }
             Log.d(TAG, "Services discovered, ready (status char: ${statusCharacteristic != null})")
+        }
+
+        override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+            Log.d(TAG, "MTU changed: $mtu (status=$status)")
+            mtuReady = true
             onConnectionState?.invoke(true)
         }
 
@@ -282,12 +306,15 @@ class BLEDeviceConfigurator(private val context: Context) {
         gatt?.writeCharacteristic(ch)
     }
 
-    /** Disconnect and clean up */
+    /** Disconnect and clean up (every cached characteristic reference
+     *  goes too — a stale statusCharacteristic would survive into the
+     *  next connection and read from a closed GATT). */
     fun disconnect() {
         gatt?.disconnect()
         gatt?.close()
         gatt = null
         characteristic = null
+        statusCharacteristic = null
     }
 
 

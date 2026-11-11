@@ -179,22 +179,24 @@ fun ConfigScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
         cfgLIS3DH = cfg["cfgLIS3DH"] == true
         cfgBLE = cfg["cfgBLE"] == true
         cfgZigbee = cfg["cfgZigbee"] == true
-        (cfg["cfgRange"] as? Int)?.let { cfgRange = it.toFloat() }
+        (cfg["cfgRange"] as? Int)?.let { cfgRange = it.toFloat().coerceIn(0f, 8f) }
         cfg["cfgAssetMode"]?.let { cfgAssetMode = it == true }
-        (cfg["cfgMotionSens"] as? Int)?.let { cfgMotionSens = it }
+        (cfg["cfgMotionSens"] as? Int)?.let { cfgMotionSens = it.coerceIn(1, 3) }
         (cfg["cfgAssetHeartbeatH"] as? Int)?.let { cfgAssetHeartbeatH = it.toString() }
         (cfg["cfgBurstIntervalMin"] as? Int)?.let { cfgBurstIntervalMin = it.toString() }
         (cfg["cfgBurstMaxPerDay"] as? Int)?.let { cfgBurstMaxPerDay = it.toString() }
-        // P2P: absent from pre-schema-5 bodies → editor values kept
-        cfgLoRaMode = (cfg["cfgLoRaMode"] as? Int) ?: 0
+        // P2P: absent from pre-schema-5 bodies → editor values kept.
+        // Clamp every field: a corrupt/foreign envelope must render sane
+        // editor state (the FW clamps its side too).
+        cfgLoRaMode = ((cfg["cfgLoRaMode"] as? Int) ?: 0).coerceIn(0, 2)
         cfgP2PRole = cfg["cfgP2PRole"] == true
-        (cfg["cfgP2PProfile"] as? Int)?.let { cfgP2PProfile = it }
+        (cfg["cfgP2PProfile"] as? Int)?.let { cfgP2PProfile = it.coerceIn(0, 2) }
         cfg["cfgP2PRxAfterTx"]?.let { cfgP2PRxAfterTx = it == true }
         (cfg["cfgP2PShortId"] as? Long)?.let {
             cfgP2PShortId = if (it == 0L) "" else "%08X".format(it)
         }
         (cfg["cfgMeshKey"] as? String)?.let { if (it.any { c -> c != '0' }) cfgMeshKey = it }
-        (cfg["cfgP2PTxPower"] as? Int)?.let { cfgP2PTxPower = it.toString() }
+        (cfg["cfgP2PTxPower"] as? Int)?.let { cfgP2PTxPower = it.coerceIn(0, 22).toString() }
     }
 
     val exportLauncher = rememberLauncherForActivityResult(

@@ -171,7 +171,10 @@ fun TrackerScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
             reverseLayout = true,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(history, key = { it.hashCode() }) { entry ->
+            // Composite key: deviceKey + timeUnix disambiguate entries
+            // whose merged payload/source collide on hashCode() alone
+            // (duplicate keys crash LazyRow).
+            items(history, key = { "${it.deviceKey}:${it.timeUnix}:${it.hashCode()}" }) { entry ->
                 HistoryCard(entry, vm.displayNameOf(entry.deviceKey))
             }
         }
@@ -204,7 +207,9 @@ private fun StatusHeader(
     ) {
         Column(Modifier.padding(12.dp)) {
             if (latest == null) {
-                Text("No data yet — scan for the beacon or enable TTN polling.",
+                Text("No data yet — wake the tracker near the phone (its BLE " +
+                    "beacon lands here automatically) or enable TTN polling " +
+                    "in Settings. See Help (top bar) for the full guide.",
                     style = MaterialTheme.typography.bodyMedium)
             } else {
                 val p = latest.payload

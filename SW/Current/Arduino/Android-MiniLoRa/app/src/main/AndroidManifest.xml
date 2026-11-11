@@ -11,8 +11,13 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     
-    <!-- Bluetooth permissions for MiniLoRa scanning -->
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <!-- Bluetooth permissions for MiniLoRa scanning.
+         neverForLocation: BLE beacon reception must NOT depend on the
+         system location toggle (Android 12+ couples scans to it without
+         this flag) — the app never derives position from scan results,
+         the devices carry GNSS. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 

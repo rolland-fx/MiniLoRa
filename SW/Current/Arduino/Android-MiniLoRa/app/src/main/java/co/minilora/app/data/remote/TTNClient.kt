@@ -242,7 +242,21 @@ object TTNClient {
                 .build()
 
             val response = client.newCall(request).execute()
-            val body = response.body?.string() ?: return@withContext null
+            // Bounded read: a captive portal or misbehaving proxy can
+            // return megabytes of HTML here — never buffer more than 2 MB
+            // of a TTN storage response (50 frames ≈ 150 KB worst case).
+            val raw = response.body ?: return@withContext null
+            val body = if ((raw.contentLength() in 1..2_000_000) || raw.contentLength() == -1L) {
+                val text = raw.string()
+                if (text.length > 2_000_000) {
+                    Log.w(TAG, "TTN response too large (${text.length} chars) — rejected")
+                    return@withContext null
+                }
+                text
+            } else {
+                Log.w(TAG, "TTN response Content-Length ${raw.contentLength()} — rejected")
+                return@withContext null
+            }
 
             if (!response.isSuccessful) {
                 Log.w(TAG, "TTN API error ${response.code}: ${body.take(200)}")
@@ -284,11 +298,22 @@ object TTNClient {
         if (timeStr.isEmpty()) return 0L
         // Strip fractional seconds beyond 3 digits — SimpleDateFormat can only parse milliseconds
         val cleaned = timeStr.replace(Regex("\\.(\\d{3})\\d+Z"), ".$1Z")
+        // TZ fix: the quoted 'Z' is a LITERAL in the pattern, so the old
+        // formatters interpreted TTN's UTC wall-clock in the phone's local
+        // timezone — frames landed hours early (UTC+ phones, breaking merge
+        // ordering vs correctly-stamped BLE frames) or hours in the future
+        // (UTC− phones, tripping the future-stamp guard and falling back to
+        // pull-time). Parse in UTC explicitly.
+        val utc = java.util.TimeZone.getTimeZone("UTC")
         return try {
-            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).parse(cleaned)?.time ?: 0L
+            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
+                timeZone = utc
+            }.parse(cleaned)?.time ?: 0L
         } catch (_: Exception) {
             try {
-                java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).parse(cleaned)?.time ?: 0L
+                java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply {
+                    timeZone = utc
+                }.parse(cleaned)?.time ?: 0L
             } catch (_: Exception) {
                 0L
             }

@@ -54,7 +54,14 @@ fun MiniLoRaApp(vm: AppViewModel, onOpenSettings: () -> Unit,
 
     LaunchedEffect(snack) {
         snack?.let {
-            snackHost.showSnackbar(it)
+            val actionLabel = vm.snackActionLabel
+            val result = snackHost.showSnackbar(it, actionLabel ?: "",
+                duration = androidx.compose.material3.SnackbarDuration.Short)
+            if (result == androidx.compose.material3.SnackbarResult.ActionPerformed &&
+                actionLabel != null) {
+                vm.performSnackAction()
+            }
+            vm.clearSnackAction()
             vm.consumeSnack()
         }
     }

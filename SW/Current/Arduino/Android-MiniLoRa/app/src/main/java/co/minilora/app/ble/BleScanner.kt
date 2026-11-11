@@ -126,6 +126,24 @@ class BleScanner(private val adapter: BluetoothAdapter?) {
         }
         callbacks.clear()
         _scanning.value = false
+        // The debounce map grows one entry per MAC per session (a trade
+        // show = thousands) — reset it with the scan.
+        lastProcessedTime.clear()
+    }
+
+    /**
+     * Drop hits not re-seen within [maxAgeMs]. A tracker that walked away
+     * must not stay listed with a stale (colored) RSSI; the device the
+     * user selected is always kept so the Setup target never disappears
+     * from under them.
+     */
+    fun expireStale(maxAgeMs: Long = 60_000) {
+        val now = System.currentTimeMillis()
+        val target = lastPayload.value?.device?.address
+        _hits.value = _hits.value.filter {
+            now - it.device.discoveredAt < maxAgeMs ||
+                it.device.address.equals(target, ignoreCase = true)
+        }
     }
 
     @SuppressLint("MissingPermission")

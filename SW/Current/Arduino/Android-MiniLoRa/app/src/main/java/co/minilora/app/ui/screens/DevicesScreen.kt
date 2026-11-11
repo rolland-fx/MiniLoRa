@@ -78,7 +78,19 @@ fun DevicesScreen(vm: AppViewModel, modifier: Modifier = Modifier) {
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 4.dp)
                         .clickable {
+                            // Q2: a stray tap silently re-targets
+                            // provisioning + TTN lookups — confirm via
+                            // snackbar with Undo (the app's snackbar host).
+                            val prevName = co.minilora.app.util.DeviceConfig.targetDeviceName
+                            val prevMac = co.minilora.app.util.DeviceConfig.targetMacAddress
                             vm.selectDevice(hit.device.name, hit.device.address)
+                            vm.showUndoableSnack(
+                                "Selected ${hit.device.name}",
+                                "Undo") {
+                                co.minilora.app.util.DeviceConfig.targetDeviceName = prevName
+                                co.minilora.app.util.DeviceConfig.targetMacAddress = prevMac
+                                co.minilora.app.util.DeviceConfig.save()
+                            }
                         },
                     colors = if (selected) CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer)

@@ -129,6 +129,31 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun consumeSnack() { _snack.value = null }
     private fun toast(msg: String) { _snack.value = msg }
 
+    // Optional snackbar action (e.g. "Undo" on a device re-target): the
+    // host shows it with the next snack and clears it after, so unrelated
+    // toasts never inherit a stale button.
+    var snackActionLabel: String? = null
+        private set
+    private var snackAction: (() -> Unit)? = null
+
+    fun showUndoableSnack(msg: String, actionLabel: String,
+                          action: () -> Unit) {
+        snackActionLabel = actionLabel
+        snackAction = action
+        _snack.value = msg
+    }
+
+    fun performSnackAction() {
+        snackAction?.invoke()
+        snackAction = null
+        snackActionLabel = null
+    }
+
+    fun clearSnackAction() {
+        snackAction = null
+        snackActionLabel = null
+    }
+
     // ---- BLE config/status ops ----
     private val configurator = BLEDeviceConfigurator(app)
     private val _statusFrame = MutableStateFlow<Map<String, Any>?>(null)
@@ -312,6 +337,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 addAll(_history.value)
             }
         }
+        // RAM cap: the file store keeps 400, but the in-memory list grew
+        // unbounded — a long field day with continuous BLE scanning made
+        // every frame O(n) to merge and the list ~300 B/entry. 1000
+        // entries ≈ 10 days at a 15-min cycle for several trackers.
+        if (_history.value.size > 1000) {
+            _history.value = _history.value.take(1000)
+        }
         // debounced persist
         if (saveJob?.isActive != true) {
             saveJob = viewModelScope.launch {
@@ -356,6 +388,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 (list + PayloadHistoryEntry(payload, ts, source, deviceKey))
                     .sortedByDescending { it.timeUnix }
             }
+        }
+        // RAM cap — same rationale as addHistory's.
+        if (list.size > 1000) {
+            list = list.take(1000)
         }
         _history.value = list
         // debounced persist — same as addHistory
@@ -679,6 +715,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                               DeviceConfig.targetMacAddress,
                               balanced = true) { /* transient */ }
             }
+            // Devices tab hygiene: drop trackers not heard for 60 s.
+            scanner.expireStale()
             delay(15_000)
         }
     }

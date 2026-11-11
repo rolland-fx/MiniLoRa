@@ -31,6 +31,23 @@ object WiFiClient {
         .readTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .build()
 
+    /** Bounded body read (W4): a captive portal or misbehaving proxy can
+     *  return megabytes of HTML on these LAN endpoints — never buffer
+     *  more than 2 MB. */
+    private fun okhttp3.Response.bodyBounded(maxChars: Long = 2_000_000L): String? {
+        val raw = body ?: return null
+        if (raw.contentLength() > maxChars) {
+            Log.w(TAG, "response too large (${raw.contentLength()} B) — rejected")
+            return null
+        }
+        val text = raw.string()
+        if (text.length > maxChars) {
+            Log.w(TAG, "response too large (${text.length} chars) — rejected")
+            return null
+        }
+        return text
+    }
+
     /**
      * Fetches the latest stored reading from the MiniLoRa-server.
      *
@@ -56,7 +73,7 @@ object WiFiClient {
                 .build()
 
             val response = client.newCall(request).execute()
-            val body = response.body?.string() ?: return@withContext null
+            val body = response.bodyBounded() ?: return@withContext null
 
             if (response.code == 404) {
                 Log.d(TAG, "Server has no data for $deviceId yet")
@@ -121,7 +138,7 @@ object WiFiClient {
                         .replace("+", "%20") + "?limit=$limit"
             val request = Request.Builder().url(url).get().build()
             val response = client.newCall(request).execute()
-            val body = response.body?.string() ?: return@withContext emptyList()
+            val body = response.bodyBounded() ?: return@withContext emptyList()
             if (!response.isSuccessful) {
                 Log.w(TAG, "WiFi recent API error ${response.code}: ${body.take(200)}")
                 return@withContext emptyList()
@@ -159,7 +176,7 @@ object WiFiClient {
             val url = "http://$serverIp:$serverPort/api/devices"
             val request = Request.Builder().url(url).get().build()
             val response = client.newCall(request).execute()
-            val body = response.body?.string() ?: return@withContext emptyList()
+            val body = response.bodyBounded() ?: return@withContext emptyList()
             if (!response.isSuccessful) return@withContext emptyList()
             val arr = org.json.JSONArray(body)
             val out = mutableListOf<ServerDevice>()
@@ -192,7 +209,7 @@ object WiFiClient {
                         .replace("+", "%20")
             val request = Request.Builder().url(url).get().build()
             val response = client.newCall(request).execute()
-            val body = response.body?.string() ?: return@withContext null
+            val body = response.bodyBounded() ?: return@withContext null
             if (!response.isSuccessful) return@withContext null
             val arr = try {
                 org.json.JSONArray(body)

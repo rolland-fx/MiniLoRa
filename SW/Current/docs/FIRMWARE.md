@@ -53,7 +53,7 @@ wake (timer / EXT1 button / power-on)
   ├─ remote commands applied (fPort 3 flags from last cycle's downlink)
   ├─ power strategy (below) → decide GPS/budget
   ├─ sense: battery → BME → LIS3DH → OPT3001 → GPS (budgeted window)
-  ├─ build payload v1 + optional diag frame (schema-03)
+  ├─ build payload v1 + optional diag frame (fPort-2, 24/28/29 B)
   ├─ BLE beacon (follows the runtime cfgBLE flag / app toggle)
   ├─ ── radio mode branches (cfgLoRaMode) ──
   ├─ LoRaWAN (mode 0): join-or-restore → uplink (RX1/RX2) → apply downlink
@@ -94,7 +94,7 @@ and reports at `cfgBurstIntervalMin` (default 5 min), capped at
 draw is the ~30–45 µA sleep floor — years on the 1100 mAh cell. Positions
 during GPS-less periods ride the fPort-4 history frame.
 
-### P2P modes (FW ≥ 3.0, `cfgLoRaMode` 1–2)
+### P2P modes (`cfgLoRaMode` 1–2)
 
 One air interface: selecting a P2P mode suspends the LoRaWAN phase entirely
 (§10.10). Both modes share a **private sync word** (0x12 — invisible to
@@ -143,7 +143,7 @@ re-requests). See `Firmware/docs/FIELD_AUTONOMY.md`.
 - **OTA rollback**: `esp_ota_mark_app_valid_cancel_rollback()` after a
   healthy boot; unconfirmed images fall back to the other slot
   (see [FLASHING.md](FLASHING.md#rollback--boot-loop-protection-automatic-no-user-action)).
-- **OTA pull (FW ≥ 2.5.0)**: `app/Ota.cpp` streams the image from the
+- **OTA pull**: `app/Ota.cpp` streams the image from the
   MiniLoRa-server into the passive slot and SHA-256-verifies it before
   switching boot — the running image is never touched on any failure.
 - **Failure paths never block**: every sensor/transport failure increments a
@@ -169,10 +169,9 @@ re-requests). See `Firmware/docs/FIELD_AUTONOMY.md`.
 - **Config service** `0000FACE…` / `0000CAFE…`: opens on long-press (120 s)
   or via the `BLE_WINDOW` command. Read **and** write use the same
   CRC-protected envelope — **schema 5 is current** (`'C'`, 5, 189-byte body,
-  CRC16 = 193 B; schema 3/4 remain accepted for old clients; legacy
-  158/159-byte blobs are rejected). The **status characteristic**
-  `0000CAFF…` returns a fresh 16-byte frame per read (real-mV battery
-  re-measured then).
+  CRC16 = 193 B; schema 3/4 remain accepted for old clients). The **status
+  characteristic** `0000CAFF…` returns a fresh 16-byte frame per read
+  (real-mV battery re-measured then).
 - **Telemetry beacon**: extended advertising, LE **coded PHY**, 625 ms
   interval, manufacturer data = payload v1 + company id. Follows the
   runtime `cfgBLE` flag — toggle it in the app's Setup tab (the old

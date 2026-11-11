@@ -232,8 +232,8 @@ stored in the same `f_cnt` column).
 1. **Device WiFi push** — the tracker's `WifiTransport` POSTs the 28-byte
    payload v1 frame to `http://IP:PORT/data?device=NAME`
    (`application/octet-stream`). The name comes from the device config
-   (v2 firmware always sends it); a push without `?device=` falls back to
-   the client IP (v1 server compatibility). Key history by the name, not
+   (the firmware always sends it); a push without `?device=` falls back to
+   the client IP. Key history by the name, not
    the IP — DHCP re-addressing must not orphan data.
    **Diagnostics ride the same radio**: when a diag frame is due (same
    ~1/day cadence or a remote SEND_DIAG), the device also POSTs the
@@ -338,13 +338,12 @@ both ask for confirmation. Deletion is permanent; take a backup first
 (`/api/export/db`) if the history matters. If a deleted device reports
 again it reappears as a fresh entry.
 
-## Device-side note (v2 firmware)
+## Device-side note
 
-`WifiTransport` posts the payload to `http://IP:PORT/data` — firmware
-**≥ 2.3.1** actually writes the body (earlier builds posted an empty
-body; fixed alongside this server). Set the server IP/port in the app's
-Config tab; the port must match `[server] port` (default 8080, not the old
-5000).
+`WifiTransport` posts the payload to `http://IP:PORT/data` — the firmware
+always writes the body (never an empty POST). Set the server IP/port in the
+app's Setup tab; the port must match `[server] port` (default 8080, not the
+old 5000).
 
 ## Home Assistant integration (MQTT discovery)
 

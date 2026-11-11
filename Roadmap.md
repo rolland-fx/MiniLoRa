@@ -1,4 +1,6 @@
-# MiniLoRa — Firmware v2 Roadmap
+# MiniLoRa — Firmware v2 Roadmap (historical, pre-3.0)
+
+> **Archived planning document.** The v2 line was never released publicly; its scope shipped cumulatively in **fw 3.0** (first public release). Kept for the decision log — the current state lives in [SW/Current/docs/README.md](SW/Current/docs/README.md).
 
 > **Status:** ✅ Phases 0–6 **implemented and verified by build + host tests** (85 checks green, `idf.py build` for esp32c6 passes with RadioLib + NimBLE + WiFi + Zigbee linked).
 > ⏳ Phase 7 (hardware validation) requires the physical device — plan in `SW/Current/Firmware/docs/PHASE7_VALIDATION.md`.

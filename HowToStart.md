@@ -6,13 +6,13 @@ after the first firmware flash.
 
 > **What "blank" means:** erased NVS — no WiFi credentials, no LoRaWAN keys,
 > no name. The tracker cannot report anywhere until you provision it.
-> If your device runs firmware **older than 3.0**, update it first (see
-> [FLASHING.md](SW/Current/docs/FLASHING.md) — the 3.0 partition layout
-> changed, so flash over USB once even if OTA worked before).
+> If your device was flashed with a build older than the current release
+> (the partition layout changed), update it over USB first — see
+> [FLASHING.md](SW/Current/docs/FLASHING.md).
 
 ---
 
-## 0 · Pick a radio mode (FW ≥ 3.0)
+## 0 · Pick a radio mode
 
 The device has **three** radio modes, chosen in the app's **Setup** tab
 (they can be changed later, any number of times):

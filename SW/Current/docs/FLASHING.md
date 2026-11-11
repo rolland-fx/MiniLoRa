@@ -41,12 +41,6 @@ idf.py -p /dev/ttyACM0 flash monitor
   coming from a different partition layout — `idf.py flash` does this
   automatically, but a manual `esptool write-flash 0x20000 minilora.bin`
   alone leaves the device unbootable ("No bootable app partitions").
-- ⚠️ **FW 3.0 changed the partition layout** (OTA slots widened to
-  `0x1E0000` each by shrinking `zb_storage`/`coredump` to 64 KB): any
-  2.6.x device must be flashed over USB **once** (all three images) to
-  adopt it — OTA between 2.6 and 3.0 across the old layout will not work.
-  Provisioning data in NVS survives the flash; the LoRaWAN session does
-  not (one rejoin on the next cycle).
 - ⚠️ Opening the port can reset the chip (USB-Serial-JTAG reacts to DTR):
   assert DTR/RTS **low before** `open()` in your capture scripts, and
   expect the port to vanish whenever the device is in deep sleep — it is
@@ -87,7 +81,7 @@ layout, 1,920 KB); the build prints the headroom (fw 3.0.0 ≈ 1.9 MB,
 Full 4 MB image including NVS and Zigbee NVRAM:
 
 ```bash
-# Backup (device running its old firmware)
+# Backup (device running its current firmware)
 esptool.py --port /dev/ttyACM0 --baud 460800 read_flash 0 0x400000 backup.bin
 md5sum backup.bin                       # keep the hash!
 
@@ -99,7 +93,7 @@ If `read_flash` complains about the port, the device may be in download mode
 — reset it and retry. Verify a restore by reading the flash again and
 diffing the two images (must be byte-identical).
 
-## 4. Updating an already-running v2 device
+## 4. Updating an already-running device
 
 Two paths:
 
@@ -108,7 +102,7 @@ Two paths:
 config, keys and history survive. If the new image is bad, see the rollback
 section — the old slot is still there.
 
-### b) OTA over the air (MiniLoRa-server, FW ≥ 2.5.0)
+### b) OTA over the air (MiniLoRa-server)
 
 Upload `build/minilora.bin` on the server's **/ota** page, **Activate** it,
 and the device pulls it at its next wake — triggered by:
@@ -145,7 +139,7 @@ rollback machinery of §a applies on top). The check endpoint is
    enabled, Zigbee/WiFi/beacon off, 15 min sleep. Without keys it will not
    join — that's fine.
 2. **Secrets are never baked into the firmware** — provision over BLE
-   (long-press ≥ 3 s → Provision tab → write). See [USER_GUIDE.md](USER_GUIDE.md).
+   (long-press ≥ 3 s → Setup tab → write). See [USER_GUIDE.md](USER_GUIDE.md).
 3. To verify the cycle, watch the serial log: each wake prints the power
    strategy (`sleeping … ms (bat … mV, low=… critical=…)`) and, on GPS fixes,
    the TTFF.
@@ -158,13 +152,12 @@ rollback machinery of §a applies on top). The check endpoint is
 | Bricked by a bad image | power-cycle: bootloader falls back to the other slot; reflash from USB |
 | Totally dead / garbage flash | restore the full backup (`write_flash 0 backup.bin`) or erase + flash + re-provision |
 | Suspicious power drain | check the diag frame's counters + `powerFlags`; bench-measure with a Joulescope (see `Firmware/docs/POWER_OPTIMIZATION.md`) |
-| Want the v1 Arduino firmware back | restore the tag-`Before-Rework` backup taken in `Firmware/docs/HW_CROSSCHECK.md` (md5 `0fd44bbd…`) |
 
 ## 7. Host-side tests (no hardware needed)
 
 ```bash
 cd SW/Current/Firmware/host_tests
-cmake --build build && ./build/minilora_tests     # expect: TOTAL: 96 checks, 0 failures
+cmake --build build && ./build/minilora_tests     # expect: TOTAL: 115 checks, 0 failures
 cd ../../TTN && python3 check_vectors.py          # golden-vector checks
 ```
 

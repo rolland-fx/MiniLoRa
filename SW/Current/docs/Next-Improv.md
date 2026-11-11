@@ -23,7 +23,7 @@ reconstruct (events, counters, quality flags).
 ## Already shipped: wake-on-motion (P5) — no work needed, just opt-in
 
 Discovered while costing this idea: the feature is **fully implemented and
-deployed** in the current firmware (2.6.16). It is gated behind the asset-mode
+deployed** in the current firmware. It is gated behind the asset-mode
 config flag, so it costs nothing until enabled per device.
 
 | Piece | Where |

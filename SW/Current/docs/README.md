@@ -1,4 +1,4 @@
-# MiniLoRa v2 — Documentation Index
+# MiniLoRa — Documentation Index
 
 **MiniLoRa** is a small ESP32-C6 tracker board: LoRaWAN + BLE + Zigbee/WiFi,
 sensors (BME280, OPT3001, LIS3DH, PA1010D GPS), 1100 mAh 1-cell Li-ion with a
@@ -33,7 +33,7 @@ history and design notes are in
 │ wake → sense → transmit → sleep  │──LoRaWAN──▶│ TTN / LNS    │──▶ your server / decoder
 │  (ESP32-C6, 1 min … 2 h cycle)   │            └──────────────┘
 │  BLE beacon (coded PHY, 28 B)    │──Zigbee───▶ coordinator (HA/Z2M/ZHA)
-│                                  │──raw LoRa─▶ P2P star gateway (FW ≥ 3.0)
+│                                  │──raw LoRa─▶ P2P star gateway (fw 3.0)
 │  radio mode (cfgLoRaMode):       │            or trek peer (2 devices,
 │   0 = LoRaWAN · 1 = star · 2 = trek           no infrastructure at all)
 └──────────────────────────────────┘
@@ -42,10 +42,10 @@ history and design notes are in
 - **LoRaWAN** is the default lifeline: 28-byte telemetry (fPort 1) +
   diagnostics up to 29 bytes (fPort 2, schema 3/4/5) up, remote commands
   down (fPort 3).
-- **P2P star** (FW ≥ 3.0) runs the same payloads over raw LoRa through a
+- **P2P star** runs the same payloads over raw LoRa through a
   powered gateway — no TTN, no subscriptions; the gateway forwards to the
   MiniLoRa-server over its own WiFi.
-- **Trek** (FW ≥ 3.0) needs no infrastructure at all: two devices exchange
+- **Trek** needs no infrastructure at all: two devices exchange
   positions directly every wake; each relays its peer over BLE so **both
   phones map both tracks** — the server is optional.
 - **BLE** is for provisioning (long-press button), live status, a coded-PHY
@@ -62,16 +62,10 @@ history and design notes are in
 
 | Version | Milestone |
 |---|---|
-| v1 | Arduino POC (tag `Before-Rework`, archived under `archive/`) — payload v1 born here |
-| v2.0–2.1 | ESP-IDF rewrite, reliability, tracker power optimization (P1/P3/P4) |
-| v2.2 | Field autonomy: remote commands, network time, awake trim |
-| v2.3 | ICD v3: diag schema-03, BLE CRC envelope + status characteristic |
-| v2.5 | Asset mode (P5), diag schema-04 (TTFF/link margin/OTA status), Zigbee NVRAM |
-| v2.6.x | GPS saga solved (RTC anchor, 8-sat gate, 240 s budgets), **remote config** (CFG_SET + diag schema-05 `config_flags`), **SET_RANGE** sleep downlink (ICD 3.6), history backfill, web-UI remote control |
-| **v3.0** | **P2P star transport** (gateway/leaves, slot grid, `/p2p` ingest), **trek mode** (two-device bilateral beacon, power ladder, peer-relay BLE adv), schema-5 config envelope (radio mode + P2P fields), boot-counter IV, OTA slots widened to 1,920 KB |
+| **3.0** (first public release) | **P2P star transport** (gateway/leaves, slot grid, `/p2p` ingest), **trek mode** (two-device bilateral beacon, power ladder, peer-relay BLE adv), schema-5 config envelope (radio mode + P2P fields), AES-CTR/CMAC frame security with boot-anchored IV, remote config (CFG_SET + diag schema-05), SET_RANGE sleep downlink, history backfill, wake-on-motion asset mode, OTA with rollback, 1,920 KB OTA slots |
 
-The wire contract — [ICD.md](../ICD.md) — is versioned independently and is
-the single source of truth for every frame.
+Everything below the wire contract — [ICD.md](../ICD.md) — is versioned
+independently and is the single source of truth for every frame.
 
 ## Repo layout
 
@@ -83,12 +77,10 @@ SW/Current/
 │   ├── main/            ← app / domain / drivers / transports
 │   ├── host_tests/      ← 115 host-side unit checks + golden vectors
 │   └── docs/            ← phase + design docs (POWER_OPTIMIZATION, …)
-├── MiniLoRa-server/     ← server: WiFi push + TTN (webhook/poller),
-│                          SQLite, graphed web UI, Docker — see its README
+├── MiniLoRa-server/     ← server: WiFi push + P2P-gateway forward + TTN
+│                          (webhook/poller), SQLite, graphed web UI, Docker —
+│                          see its README
 ├── TTN/                 ← decoder.js, downlink.js, check_vectors.*
 └── Arduino/
     └── Android-MiniLoRa/← the app (Compose, Kotlin 2.1)
-
-archive/                ← V1 firmware, OLD-BETA5 hardware, superseded docs
-                           (see archive/README.md)
 ```

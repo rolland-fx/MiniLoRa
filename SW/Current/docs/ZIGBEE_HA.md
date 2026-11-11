@@ -58,11 +58,9 @@ cycle later it is back in deep sleep.
 2. **Reports, not polling.** The device pushes `Report` commands once per
    wake and sleeps; it does not answer read requests while sleeping. Polling
    entities in HA will show stale values between wakes.
-3. **Pressure units — fixed in FW 2.3.1.** The ZCL `MeasuredValue` unit is
-   0.1 kPa (= 1 hPa) per spec §4.5.2.2.1.1, and the device sends raw hPa —
-   correct. Earlier firmware (≤ 2.3.0) declared the cluster bounds as
-   30000/12000 (a 0.1 hPa mix-up), placing the reported ~1013 outside the
-   range; coordinators would clamp or flag it. Re-flash ≥ 2.3.1 and rejoin.
+3. **Pressure units** — the ZCL `MeasuredValue` unit is 0.1 kPa (= 1 hPa)
+   per spec §4.5.2.2.1.1, and the device sends raw hPa with cluster bounds
+   300–1200 — correct.
 4. **Zigbee and LoRaWAN coexist** on the C6 but not simultaneously — the
    cycle sequences them; enabling Zigbee adds a few seconds of awake time
    per cycle (energy: see `Firmware/docs/POWER_OPTIMIZATION.md`).

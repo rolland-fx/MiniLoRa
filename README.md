@@ -101,14 +101,14 @@ Design with FreeCad 1.0
 
 ## 💾 Software Overview
 
-**📖 Documentation (v2 firmware & app): [`SW/Current/docs/README.md`](SW/Current/docs/README.md)**
+**📖 Documentation (firmware & app): [`SW/Current/docs/README.md`](SW/Current/docs/README.md)**
 — user guide (Android app), flashing & OTA, firmware architecture,
 LoRaWAN uplink/downlink reference, Zigbee/Home-Assistant integration.
 The byte-level wire contract lives in [`SW/Current/ICD.md`](SW/Current/ICD.md).
 
-**Firmware (ESP-IDF, v3.0)** — everything 2.6 had (remote configuration
-over LoRa downlink, OTA with WiFi force+restore, wake-on-motion asset
-mode, store-and-forward buffer, bounded logs) **plus two cloud-free radio
+**Firmware (ESP-IDF, v3.0)** — remote configuration over LoRa downlink,
+OTA with WiFi force+restore, wake-on-motion asset mode,
+store-and-forward buffer, bounded logs, **plus two cloud-free radio
 modes**: **P2P star** (a powered gateway forwards leaves' raw-LoRa frames
 to the server — no TTN, no subscriptions) and **trek** (two devices
 exchange positions directly and relay each other over BLE, so both phones
@@ -116,7 +116,8 @@ map both tracks — no infrastructure at all). Frame security: AES-CTR
 bodies + CMAC with a boot-anchored IV; 4-step TX-power ladder (up to
 +22 dBm, legal on 869.525 MHz).
 
-**Server (FastAPI + SQLite)** — WiFi push + TTN poller ingestion, graphed
+**Server (FastAPI + SQLite)** — WiFi push + P2P-gateway forward + TTN
+(webhook/poller) ingestion, graphed
 web UI (per-page routes, grouped devices, range selectors), remote
 commands, OTA firmware hosting, HA bridge via MQTT discovery, and
 LAN-ready deployment: Docker (bounded logs, 100 MB-capped database with
@@ -163,7 +164,7 @@ each with its own decision log. The distilled state:
 
 **Already done** (struck from every wishlist): remote config over LoRa
 downlink, OTA with WiFi force+restore, wake-on-motion asset mode (all in
-fw 2.6.x), bounded logs + 100 MB-capped database, Docker + Proxmox LXC
+fw 3.0), bounded logs + 100 MB-capped database, Docker + Proxmox LXC
 deployment, the self-made ESP32-C6-MINI-1 board, the CN3165 solar
 charger, repo reorganization and the public release — and, in fw 3.0 /
 app 3.0 / server 2026-11: **P2P star + trek radio modes**, delivery

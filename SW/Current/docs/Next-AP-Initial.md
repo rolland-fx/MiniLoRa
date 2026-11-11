@@ -1,6 +1,6 @@
 # Next: AP Initial Config — SoftAP Captive-Portal Provisioning
 
-**Status:** planned (approved concept) · **Date:** 2026-11-04 · **Target:** FW 2.6.13
+**Status:** planned (approved concept) · **Date:** 2026-11-04
 
 The scenario: a device **arrives at a client's place as blank as possible** and
 the client sets it up themselves — no app, no laptop tools, any phone (iOS
@@ -15,7 +15,7 @@ accepts today, and the device reboots into its normal cycle.
 | Resource | Budget | Portal cost | Verdict |
 |---|---|---|---|
 | **Flash (per OTA slot)** | `ota_0`/`ota_1` = 0x1E0000 = 1,966,080 B each (fw 3.0 layout); current bin (3.0.0) ≈ 1,866,000 B → **~100 KB free per slot** | **+12–18 KB** total (see breakdown below) | ✅ ~70 KB margin |
-| **RAM (D/IRAM)** | 226 KB free of 452 KB (idf_size, 2.6.12 map) | SoftAP ~25–30 KB + NimBLE (already resident in config mode) ~35 KB + minimal HTTP ~1 KB | ✅ both stacks run concurrently |
+| **RAM (D/IRAM)** | ~226 KB free of 452 KB (idf_size, fw 3.0 map) | SoftAP ~25–30 KB + NimBLE (already resident in config mode) ~35 KB + minimal HTTP ~1 KB | ✅ both stacks run concurrently |
 
 Flash cost breakdown (the design keeps it small on purpose):
 
@@ -184,7 +184,7 @@ misconfigures keys — same guarantee as BLE).
 | Bench pass + golden-vector check | ~0.5–1 d |
 | **Total** | **~3–4 days** |
 
-Ships as FW 2.6.13, deployed via the usual OTA.
+Ships as a firmware release, deployed via the usual OTA.
 
 ---
 

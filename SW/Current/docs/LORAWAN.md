@@ -63,7 +63,7 @@ Interpretation tips: rising `gpsTimeouts` + `gpsConsecFails` = indoor/stored;
 jumping by hundreds per day with `unexpectedResets` growing = a crash loop
 (recovery mode would also be flagged).
 
-### fPort 4 — Position history (store-and-forward, FW ≥ 2.6.0)
+### fPort 4 — Position history (store-and-forward, ICD 3.2)
 
 On GPS-less cycles (throttled to every 4th) the device sends its **two most
 recent fixes** (lat/lon/GPS-time/sats, oldest first) so underground periods
@@ -82,7 +82,7 @@ tagged `ttn-hist`. Format: ICD §2.1.
 
 Two ABIs are active:
 
-### fPort 3 — Remote commands, 3 bytes (firmware ≥ 2.2.0)
+### fPort 3 — Remote commands, 3 bytes
 
 ```
 [0x4D][opcode][arg]
@@ -109,9 +109,8 @@ Remote page (it cancels pending commands from any surface).
 **Programmatically:** `SW/Current/TTN/downlink.js` (`encodeDownlink` hook) or
 the TTN v3 `downlink/push` REST call the app uses.
 
-*Removed (FW 2.4.0):* the old v1 fPort-1 downlink ABI (sleepIdx/gpio6).
-Sleep duration is changed via the BLE config envelope; fPort-1 downlinks are
-ignored.
+Sleep duration is changed via the BLE config envelope or the **SET_RANGE**
+command (fPort 3, ICD §3); fPort-1 downlinks are ignored.
 
 ## Testing without hardware
 

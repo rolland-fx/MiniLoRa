@@ -30,10 +30,10 @@
 #include "../domain/RtcClock.hpp"
 #include "../domain/Telemetry.hpp"
 #include "../drivers/Pins.hpp"
+#include "../drivers/BoardPower.hpp"
 #include "../transports/ble/BleTransport.hpp"
 #include "../transports/p2p/P2pRadio.hpp"
 
-#include <driver/gpio.h>
 #include <esp_err.h>
 #include <esp_log.h>
 #include <esp_random.h>
@@ -113,7 +113,9 @@ uint8_t txPowerDbm()
 /// Long idle: light-sleep until `targetMs` (GPS epoch). RAM, the RTC
 /// state and the system clock all survive; the 5 s task WDT cannot see
 /// a 100 s pause, so the task is unsubscribed for the duration.
-/// No-op when the wait is trivial.
+/// The EXT1 button wake stays armed: a mid-gap button press short-
+/// circuits the wait (the next deep-sleep boundary would otherwise eat
+/// it). No-op when the wait is trivial.
 void sleepUntilMs(uint64_t targetMs)
 {
     const uint64_t nowMs = rtcSystemMs();
@@ -121,6 +123,8 @@ void sleepUntilMs(uint64_t targetMs)
         return;
     }
     esp_sleep_enable_timer_wakeup((targetMs - nowMs) * 1000ULL);
+    esp_sleep_enable_ext1_wakeup(1ULL << pins::kButtonWakeup,
+                                 ESP_EXT1_WAKEUP_ANY_LOW);
     // Pending UART output aborts light sleep — let the log drain first.
     vTaskDelay(pdMS_TO_TICKS(2));
     esp_task_wdt_delete(nullptr);
@@ -357,11 +361,15 @@ void wakePhase(const Context &ctx, bool *slept)
 
     if (trekState.missCount >= kMaxMiss) {
         // ICD §10.8 contact-lost signal: 3× double-blink, green LED.
+        // Via BoardPower: the production board's green LED is active-LOW
+        // (bench-verified) — driving the raw pin HIGH means OFF, so the
+        // old raw-gpio code blinked when contact was FINE and went dark
+        // when lost. Exactly backwards.
         for (int r = 0; r < 3; ++r) {
             for (int b = 0; b < 2; ++b) {
-                gpio_set_level(pins::kLedGreen, 1);
+                BoardPower::instance().ledGreen(true);
                 vTaskDelay(pdMS_TO_TICKS(150));
-                gpio_set_level(pins::kLedGreen, 0);
+                BoardPower::instance().ledGreen(false);
                 vTaskDelay(pdMS_TO_TICKS(100));
             }
             vTaskDelay(pdMS_TO_TICKS(500));

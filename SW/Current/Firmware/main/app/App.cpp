@@ -8,6 +8,7 @@
 #include <esp_log.h>
 #include <esp_ota_ops.h>
 #include <esp_timer.h>
+#include <esp_random.h>
 #include <esp_sleep.h>
 #include <esp_task_wdt.h>
 #include <esp_wifi.h>
@@ -63,9 +64,13 @@ constexpr uint32_t kBeaconDurationMs = 2'500;
 constexpr uint32_t kWifiTimeoutMs = 10'000;
 
 RTC_DATA_ATTR int16_t g_prevAcc[3] = {0}; // last cycle accel (motion delta)
-// P2P frame counter (ICD §10.3) — per-origin, persists across deep sleep;
-// a power cycle resets it, which the server reads as a counter reset (the
-// insights module treats resets as new spans, never as loss bursts).
+// P2P frame counter (ICD §10.3) — per-origin, persists across deep sleep.
+// A power cycle RESETS the RTC variable to 0 — but the CTR IV is
+// origin||seq||boot, and only `boot` (uint16, wraps at 65536) would
+// separate the old and new streams: after enough battery swaps the
+// (seq, boot) pairs repeat and the keystream replays. So a power cycle
+// seeds the counter from the hardware RNG instead: a 2^32-random start
+// makes IV reuse astronomically unlikely (3.6.5 security note).
 RTC_DATA_ATTR uint32_t g_p2pSeq = 0;
 
 // Remote-command flags (fport 3): set mid-cycle by a downlink, consumed on
@@ -158,6 +163,17 @@ static uint32_t p2pOriginId()
 static uint64_t rtcNowMs()
 {
     return static_cast<uint64_t>(rtcNowSec()) * 1000;
+}
+
+/** Clamped sleep-table access: cfgRange is a raw u8 from the config
+ *  envelope (and writable via the SET_RANGE downlink), so every read
+ *  goes through here — a corrupt value must yield the slowest period,
+ *  never an out-of-bounds read. */
+static uint32_t sleepTableMs()
+{
+    return kSleepTableMs[g_cfg.cfgRange < kSleepTableLen
+                             ? g_cfg.cfgRange
+                             : kSleepTableLen - 1];
 }
 
 bool longPressDetected()
@@ -610,6 +626,14 @@ void runCycle(bool recovery)
     // fallback's full-sleep assumption.
     const bool earlyWake = g_buttonWake || g_motionWake;
 
+    // A power cycle zeroes every RTC variable: re-seed the P2P frame
+    // counter from the RNG (IV-reuse guard, see the g_p2pSeq note).
+    // Deep-sleep wakes keep the counter running (same keystream domain,
+    // boot counter unchanged). Also handles the first boot after flash.
+    if (reason == ESP_SLEEP_WAKEUP_UNDEFINED) {
+        g_p2pSeq = esp_random();
+    }
+
     ConfigDefaults defaults = {
         .globalName = CONFIG_MINILORA_GLOBAL_NAME,
         .wifiSSID = "",
@@ -642,6 +666,10 @@ void runCycle(bool recovery)
              g_cfg.cfgWiFi, g_cfg.cfgAssetMode);
 
     Diagnostics diag{};
+    // fwMajor/Minor/Patch are stamped from CONFIG_MINILORA_FW_VERSION at
+    // every encode site (telemetry/diag/status) — this 2 is only a
+    // pre-stamp placeholder for the BLE status read (which parses the
+    // version itself from the same Kconfig string).
     diag.fwMajor = 2;
     g_statusDiag = &diag; // live status for BLE config-window reads
     const bool recoveryNow =
@@ -676,7 +704,7 @@ void runCycle(bool recovery)
             ESP_LOGI(TAG, "config updated (v3 envelope)");
         }
         feed();
-        prepareSleep(kSleepTableMs[g_cfg.cfgRange]);
+        prepareSleep(sleepTableMs());
     }
 
     if (recoveryNow) {
@@ -686,7 +714,7 @@ void runCycle(bool recovery)
                  diag.unexpectedResets);
         BleTransport::runConfigService(g_cfg, g_cfg.globalName,
                                        kConfigTimeoutMs, statusProvider);
-        prepareSleep(kSleepTableMs[g_cfg.cfgRange]);
+        prepareSleep(sleepTableMs());
     }
 
     // ---- phase: remote BLE config window (downlink cmd 0x04) ----
@@ -701,7 +729,7 @@ void runCycle(bool recovery)
             g_cfg = result.cfg;
             ConfigStore::save(g_cfg);
         }
-        prepareSleep(kSleepTableMs[g_cfg.cfgRange]);
+        prepareSleep(sleepTableMs());
     }
 
     // ---- phase: power strategy (P1/P4) ----
@@ -1189,7 +1217,7 @@ void runCycle(bool recovery)
     std::memcpy(g_prevAcc, t.acc, sizeof(g_prevAcc));
     DiagStore::save(diag);
     DiagStore::onCleanCycle();
-    uint32_t sleepMs = kSleepTableMs[g_cfg.cfgRange];
+    uint32_t sleepMs = sleepTableMs();
     if (batLow) {
         sleepMs = sleepMs * 2 > kSleepTableMs[kSleepTableLen - 1]
                       ? kSleepTableMs[kSleepTableLen - 1]
@@ -1235,11 +1263,8 @@ void runCycle(bool recovery)
             rtcNowMs() + static_cast<uint64_t>(sleepMs) * 1000;
         // Clamp the index: cfgRange is a raw u8 from the config envelope
         // and a corrupt blob must not index past the sleep table.
-        const uint8_t rangeIdx = g_cfg.cfgRange < kSleepTableLen
-                                     ? g_cfg.cfgRange
-                                     : kSleepTableLen - 1;
         const uint64_t windowMs = p2ptrek::nextWindowStartMs(
-            kSleepTableMs[rangeIdx], notBefore);
+            sleepTableMs(), notBefore);
         const uint64_t wakeMs = windowMs - 120'000;
         const uint64_t aligned =
             wakeMs > rtcNowMs() ? wakeMs - rtcNowMs() : 0;

@@ -67,11 +67,20 @@ bool WifiTransport::start(const char *ssid, const char *password,
             sizeof(wifiCfg.sta.ssid));
     strncpy(reinterpret_cast<char *>(wifiCfg.sta.password), password,
             sizeof(wifiCfg.sta.password));
-    wifiCfg.sta.threshold.authmode = WIFI_AUTH_WPA_WPA2_PSK;
+    // An empty password = open network (bench/campus/demo SSIDs): the old
+    // WPA2-only threshold made every open SSID time out with no hint why.
+    wifiCfg.sta.threshold.authmode = (password[0] == '\0')
+                                         ? WIFI_AUTH_OPEN
+                                         : WIFI_AUTH_WPA_WPA2_PSK;
     esp_wifi_set_config(WIFI_IF_STA, &wifiCfg);
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_start());
+    // LAN-range TX power (~13 dBm instead of the 20 dBm default): the
+    // server is typically in-building (< 30 m), and the default pulls
+    // ~240 mA TX spikes during every push/OTA. Halves the WiFi phase's
+    // average current; range is not a concern on this path.
+    esp_wifi_set_max_tx_power(52);
 
     const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(timeoutMs);
     while (xTaskGetTickCount() < deadline) {

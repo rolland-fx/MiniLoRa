@@ -3,6 +3,7 @@
 #include "Sleep.hpp"
 #include "../domain/P2pFrame.hpp"
 #include "../domain/P2pSchedule.hpp"
+#include "../domain/RtcClock.hpp"
 #include "../transports/p2p/P2pRadio.hpp"
 #include "../transports/wifi/WifiTransport.hpp"
 
@@ -16,6 +17,10 @@
 #include <cstring>
 
 namespace minilora {
+
+// App.cpp — the RTC-backed clock's validity flag (GPS-anchored system
+// clock; see P2pTrek.cpp / App.cpp for the anchor + power-cycle rules).
+extern bool g_rtcTimeValid;
 
 
 namespace p2pgw {
@@ -47,6 +52,15 @@ RTC_DATA_ATTR uint8_t learnN = 0;
 RTC_DATA_ATTR DedupEntry dedup[kMaxDedup];
 RTC_DATA_ATTR uint8_t dedupN = 0;
 RTC_DATA_ATTR uint32_t ownSeq = 0;
+// WiFi path state for THIS wake: false = never tried, true = connected.
+// Forward-starvation fix: the old code set g_wifiOk after the FIRST
+// successful push and then skipped every later forward in the same wake
+// — with 2+ leaves heard in one catch slot only the first leaf's frame
+// reached the server. "Connected" is now latched per wake (the connect
+// attempt is the expensive part, pushes after it are cheap); the skip
+// only happens on a FAILED attempt or when no WiFi is configured.
+RTC_DATA_ATTR bool wifiUp = false;
+RTC_DATA_ATTR bool wifiTried = false;
 
 void initState()
 {
@@ -63,7 +77,6 @@ void initState()
 
 const DeviceConfig *g_cfg = nullptr;
 P2pRadio *g_radio = nullptr;
-bool g_wifiOk = false;
 
 bool keyPresent()
 {
@@ -107,8 +120,19 @@ void remember(uint32_t origin, uint32_t seq)
 /// path — the batched /p2p endpoint is the next step).
 void forward(const uint8_t *body, size_t bodyLen, uint32_t origin)
 {
-    if (g_wifiOk || g_cfg->wifiSSID[0] == '\0') {
-        return;
+    if (g_cfg->wifiSSID[0] == '\0' || (wifiTried && !wifiUp)) {
+        return; // no WiFi configured, or this wake's connect already failed
+    }
+    if (!wifiUp) {
+        wifiTried = true;
+        // Probe the path with the first frame; a failure marks the wake
+        // (no more connect attempts this cycle — each costs seconds).
+        if (!WifiTransport::start(g_cfg->wifiSSID, g_cfg->wifiPassword,
+                                  10'000)) {
+            ESP_LOGW(TAG, "wifi connect failed — forwards off this wake");
+            return;
+        }
+        wifiUp = true;
     }
     char name[12];
     snprintf(name, sizeof(name), "%08lX", static_cast<unsigned long>(origin));
@@ -116,11 +140,14 @@ void forward(const uint8_t *body, size_t bodyLen, uint32_t origin)
                                    g_cfg->wifiPassword, g_cfg->wifiServerIP,
                                    g_cfg->wifiServerPort, name)) {
         ESP_LOGI(TAG, "forwarded %08lX", static_cast<unsigned long>(origin));
-        g_wifiOk = true; // one successful push per wake proves the path
     }
 }
 
 /// Handle one received on-air frame: authenticate, dedup, learn, forward.
+/// `nowSec` MUST be GPS-anchored epoch (rtcNowSec) — the learn table
+/// persists across deep sleep and the predicted-window math keys on the
+/// same epoch as the slot grid (esp_timer seconds reset every boot; the
+/// old stamping desynced the phase after every reboot).
 void handleAirFrame(const uint8_t *buf, size_t len, uint32_t nowSec)
 {
     uint8_t type, body[p2p::kMaxBody];
@@ -195,9 +222,17 @@ void wakePhase(const Context &ctx, bool *slept)
         return;
     }
     g_radio = &radio;
-    g_wifiOk = false;
+    wifiUp = false;
+    wifiTried = false;
 
-    const uint32_t nowSec = esp_timer_get_time() / 1000000;
+    // Grid math keys on the GPS-anchored clock (the slot grid is epoch-
+    // based; esp_timer resets every boot). Without RTC time there is no
+    // grid — fall back to one catch-slot listen per boot (the learn
+    // table's phase self-heals on the next GPS fix).
+    const uint32_t nowSec = g_rtcTimeValid
+                                ? static_cast<uint32_t>(rtcSystemMs() / 1000)
+                                : static_cast<uint32_t>(esp_timer_get_time() / 1000000);
+    const bool gridAnchored = g_rtcTimeValid;
 
     if (mode == 0) {
         // ---- awake-learn (bench step 1): continuous RX, immediate
@@ -209,7 +244,9 @@ void wakePhase(const Context &ctx, bool *slept)
             int got = radio.receive(buf, sizeof(buf), 3000, nullptr, nullptr);
             if (got > 0) {
                 handleAirFrame(buf, static_cast<size_t>(got),
-                               esp_timer_get_time() / 1000000);
+                               g_rtcTimeValid
+                                   ? static_cast<uint32_t>(rtcSystemMs() / 1000)
+                                   : static_cast<uint32_t>(esp_timer_get_time() / 1000000));
             }
             feedWatchdog();
         }
@@ -227,7 +264,7 @@ void wakePhase(const Context &ctx, bool *slept)
     const uint64_t nowMs = static_cast<uint64_t>(nowSec) * 1000;
     const uint64_t catchMs = p2p::nextCatchSlotMs(profile, nowMs);
     const uint32_t slotLen = p2p::airParams(profile).slotLenMs;
-    if (catchMs > nowMs + kWakeOverheadMs) {
+    if (gridAnchored && catchMs > nowMs + kWakeOverheadMs) {
         // Not our window yet — arm the RTC timer and sleep; the next boot
         // (same function) does the listening.
         radio.park();
@@ -235,17 +272,26 @@ void wakePhase(const Context &ctx, bool *slept)
         *slept = true;
         return;
     }
+    if (!gridAnchored) {
+        ESP_LOGW(TAG, "no RTC time — unanchored grid, listening once per boot");
+    }
 
     // In-window: listen the catch slot.
     uint8_t buf[255];
     int got = radio.receive(buf, sizeof(buf), slotLen, nullptr, nullptr);
     if (got > 0) {
         handleAirFrame(buf, static_cast<size_t>(got),
-                       esp_timer_get_time() / 1000000);
+                       g_rtcTimeValid
+                           ? static_cast<uint32_t>(rtcSystemMs() / 1000)
+                           : static_cast<uint32_t>(esp_timer_get_time() / 1000000));
     }
 
     // Predicted leaf windows due within the next ~55 s of this wake.
-    const uint64_t nowMs2 = static_cast<uint64_t>(esp_timer_get_time() / 1000);
+    // GPS-anchored wall clock (the learn table's phase is epoch-based);
+    // the wait is BOUNDED per leaf (55 s) — a stale phase (leaf changed
+    // its period, or the table predates a reboot) must cost one catch
+    // slot at most, never the whole wake.
+    const uint64_t nowMs2 = minilora::rtcSystemMs();
     for (int i = 0; i < learnN; ++i) {
         const uint64_t dueMs =
             (static_cast<uint64_t>(learn[i].lastSlotSec) +
@@ -255,13 +301,18 @@ void wakePhase(const Context &ctx, bool *slept)
         }
         const uint64_t slotMs =
             p2p::nextDataSlotMs(learn[i].origin, profile, dueMs);
+        if (slotMs > nowMs2 + 55'000) {
+            continue; // stale/mismatched phase — not this wake
+        }
         if (slotMs > nowMs2 + 100) {
             vTaskDelay(pdMS_TO_TICKS(slotMs - nowMs2));
         }
         got = radio.receive(buf, sizeof(buf), slotLen, nullptr, nullptr);
         if (got > 0) {
             handleAirFrame(buf, static_cast<size_t>(got),
-                           esp_timer_get_time() / 1000000);
+                           g_rtcTimeValid
+                               ? static_cast<uint32_t>(rtcSystemMs() / 1000)
+                               : static_cast<uint32_t>(esp_timer_get_time() / 1000000));
         }
         feedWatchdog();
     }
@@ -270,8 +321,10 @@ void wakePhase(const Context &ctx, bool *slept)
     sendOwnFrame(ctx);
 
     // Next wake: the next catch slot (the learned-window refinement rides
-    // the RTC table on the next boot).
-    const uint64_t nowMs3 = static_cast<uint64_t>(esp_timer_get_time() / 1000);
+    // the RTC table on the next boot). Same clock discipline as above.
+    const uint64_t nowMs3 =
+        gridAnchored ? minilora::rtcSystemMs()
+                     : static_cast<uint64_t>(esp_timer_get_time() / 1000);
     const uint64_t nextCatch = p2p::nextCatchSlotMs(profile, nowMs3 + 1000);
     const uint64_t sleepMs =
         nextCatch > nowMs3 + kWakeOverheadMs

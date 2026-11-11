@@ -147,6 +147,10 @@ class TTNPoller:
                 log.warning("TTN poll %s failed: %s", dev, e)
         return n
 
+    async def aclose(self):
+        """Close the HTTP client (lifespan shutdown)."""
+        await self._client.aclose()
+
     async def run_forever(self):
         log.info("TTN poller started (%s, %d device(s), every %ds)",
                  self.url.split('/api')[0], len(self.device_ids),

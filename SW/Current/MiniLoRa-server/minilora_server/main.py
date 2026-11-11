@@ -7,6 +7,7 @@ storage API, stores everything in SQLite and serves a graphed web UI.
 
 import asyncio
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -15,6 +16,7 @@ import signal
 import tempfile
 import time
 import tomllib
+from contextlib import asynccontextmanager
 from dataclasses import fields as dc_fields
 from datetime import datetime
 from pathlib import Path
@@ -33,7 +35,7 @@ from . import config as _configmod
 from .decode import decode_diagnostics, decode_history, decode_telemetry
 from .cfgbuild import SLEEP_MINUTES
 from .db import Database
-from .ttn import TTNPoller, decode_frame, parse_uplink_event
+from .ttn import TTNPoller, decode_frame, parse_uplink_event, received_at_to_epoch
 
 log = logging.getLogger("minilora")
 
@@ -45,17 +47,80 @@ db = Database(cfg.server.db_path)
 
 
 def check_push_token(request: Request, token: Optional[str]) -> None:
-    """Shared secret for write endpoints (empty in config = open)."""
+    """Shared secret for write endpoints (empty in config = open).
+    Constant-time compare: != leaks the prefix length byte-by-byte to a
+    timing oracle — cheap to do right even on a LAN."""
     expected = cfg.server.push_token or cfg.ttn.webhook_token
     if not expected:
         return
     given = token or request.headers.get("X-MiniLoRa-Token", "")
-    if given != expected:
+    if not hmac.compare_digest(given.encode("utf-8"),
+                               expected.encode("utf-8")):
         raise HTTPException(status_code=403, detail="invalid token")
 
 
+@asynccontextmanager
+async def lifespan(app):
+    """Replaces the deprecated @app.on_event("startup") hook (FastAPI
+    deprecation warning on every boot with 0.162+). Same setup, plus a
+    shutdown half that cancels the background tasks cleanly instead of
+    leaving them to be killed with the process."""
+    global _poller_task, _poller, _fetch_lock, _retention_task
+    _poller = None
+    _fetch_lock = asyncio.Lock()
+
+    # ---- retention (keep the DB bounded for set-and-forget LAN use) ----
+    _ensure_log_file_handler()
+    if cfg.retention.enabled:
+        _retention_task = asyncio.create_task(_retention_loop())
+        log.info("retention: %d readings/device, DB cap %d MB, every %d s",
+                 cfg.retention.readings_per_device, cfg.retention.db_max_mb,
+                 cfg.retention.check_interval_s)
+
+    # ---- Home Assistant bridge (MQTT discovery) ----
+    if cfg.ha.enabled and cfg.ha.broker:
+        try:
+            from minilora_server.ha import HAPublisher
+            ha_publisher = HAPublisher(cfg.ha)
+            db.on_reading = _ha_on_reading
+            db.on_diagnostic = _ha_on_diagnostic
+            ha_publisher._on_connected = _ha_backfill
+            ha_publisher.start()
+            log.info("HA bridge started (%s:%d)", cfg.ha.broker, cfg.ha.port)
+        except Exception:
+            log.exception("HA bridge failed to start")
+    else:
+        log.info("HA bridge disabled ([ha] enabled=false or no broker)")
+
+    # ---- TTN storage-API poller ----
+    if cfg.ttn.enabled and cfg.ttn.api_key and cfg.ttn.device_ids:
+        poller = TTNPoller(
+            cfg.ttn.region, cfg.ttn.app_id, cfg.ttn.api_key,
+            cfg.ttn.device_ids, cfg.ttn.poll_interval_s,
+            cfg.ttn.poll_limit, cfg.ttn.poll_window_h,
+            on_frame=_store_polled,
+        )
+        _poller = poller
+        # Keeping the reference matters: an unreferenced task can be
+        # garbage-collected before it ever runs (this silently killed the
+        # poller once — no log line, no polls, nothing).
+        _poller_task = asyncio.create_task(poller.run_forever())
+    else:
+        log.info("TTN poller disabled ([ttn] enabled=false or incomplete)")
+
+    yield
+
+    # ---- shutdown: cancel background tasks so uvicorn exits promptly ----
+    for task in (_poller_task, _retention_task):
+        if task:
+            task.cancel()
+    if _poller:
+        await _poller.aclose()
+
+
 app = FastAPI(title="MiniLoRa-server", version="1.0.0",
-              docs_url="/api/docs", openapi_url="/api/openapi.json")
+              docs_url="/api/docs", openapi_url="/api/openapi.json",
+              lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(BASE / "static")), name="static")
 
 
@@ -134,19 +199,37 @@ async def receive_diag(request: Request,
 async def p2p_ingest(request: Request, token: str = Query(None),
                      device: str = Query(None)):
     """One NDJSON line per frame the gateway heard on the mesh:
-    {"origin":"AABBCCDD","seq":N,"ts":epoch,"hex":"<body hex>"[,"rssi","snr"]}
+    {"origin":"AABBCCDD","seq":N,"ts":epoch,"hex":"<body hex>"
+     [,"kind":"telemetry|diagnostics|history"][,"rssi","snr"]}
 
     The gateway identifies itself via ?device=; every line is stored under
     the ORIGIN's id (source 'p2p' / 'p2p-hist'), frame_ts = the origin's
     own gps time and f_cnt = the P2P seq counter — so dedup, retention and
-    the delivery-ratio analytics all work unchanged. The body type is
-    recovered from its length + schema byte (28 B telemetry vs 24/28/29
-    diag vs §2.1 history) exactly like the TTN ingest path."""
+    the delivery-ratio analytics all work unchanged. The body kind comes
+    from the line's "kind" field (the batched contract — telemetry byte 0
+    is a signed temperature, 3-5 °C reads as diag schema 3/4/5 to the old
+    heuristic), falling back to length + schema byte for old gateways."""
     check_push_token(request, token)
     gw = device or "p2p-gateway"
+    body = await request.body()
+    # Bounded batch: a superframe of 461 slots × ~90 B/line ≈ 45 KB is the
+    # realistic maximum; 1 MB rejects runaway/malformed clients before any
+    # parsing happens (a capless inline parse on the event loop stalls the
+    # whole server).
+    if len(body) > 1_000_000:
+        raise HTTPException(413, f"batch too large ({len(body)} B; cap 1 MB)")
+    # Decode + insert on a worker thread: the loop is pure-blocking DB IO
+    # (same pattern as the retention pass).
+    stored, devices = await asyncio.to_thread(
+        _p2p_process, gw, body.decode("utf-8", errors="replace"))
+    log.info("p2p batch from %s: %d stored (%d devices)", gw, stored,
+             len(devices))
+    return {"ok": True, "stored": stored, "devices": sorted(devices)}
+
+
+def _p2p_process(gw: str, text: str) -> tuple:
     stored = 0
     seen = set()
-    text = (await request.body()).decode("utf-8", errors="replace")
     for line in text.splitlines():
         line = line.strip()
         if not line:
@@ -166,17 +249,24 @@ async def p2p_ingest(request: Request, token: str = Query(None),
         seen.add(origin)
         frame_ts = int(entry.get("ts") or 0) or None
         seq = entry.get("seq")
-        # Body type from length + schema byte (the §10.3 header's `type` is
-        # transport metadata; the server trusts the body shape): 28 B with
-        # a non-schema byte 0 = telemetry (fPort-1 shape), 24/28/29 with
-        # schema 3/4/5 = diagnostics, schema 0x01 = §2.1 history.
-        kind = None
-        if len(data) == 28 and data[0] not in (1, 3, 4, 5):
-            kind = "telemetry"
-        elif len(data) in (24, 29) or (len(data) == 28 and data[0] in (3, 4, 5)):
-            kind = "diagnostics"
-        elif len(data) >= 2 and data[0] == 1:
-            kind = "history"
+        # Body kind: an explicit "kind" field wins (the batched gateway
+        # contract — telemetry byte 0 is a SIGNED temperature, so 3-5 °C
+        # readings look exactly like diag schema bytes 3/4/5 to any
+        # heuristic). Without it, fall back to length + schema byte:
+        # 28 B with a non-schema byte 0 = telemetry (fPort-1 shape),
+        # 24/28/29 with schema 3/4/5 = diagnostics, schema 0x01 = §2.1
+        # history. The heuristic misfiles 3-5 °C telemetry as diagnostics
+        # — that is why new gateways SHOULD set kind.
+        kind = str(entry.get("kind", "")).strip().lower() or None
+        if kind not in ("telemetry", "diagnostics", "history"):
+            kind = None
+        if kind is None:
+            if len(data) == 28 and data[0] not in (1, 3, 4, 5):
+                kind = "telemetry"
+            elif len(data) in (24, 29) or (len(data) == 28 and data[0] in (3, 4, 5)):
+                kind = "diagnostics"
+            elif len(data) >= 2 and data[0] == 1:
+                kind = "history"
         if kind is None:
             continue
         try:
@@ -207,9 +297,7 @@ async def p2p_ingest(request: Request, token: str = Query(None),
                     stored += 1
         except (ValueError, KeyError) as e:
             log.info("p2p frame skipped (%s): %s", origin, e)
-    log.info("p2p batch from %s: %d stored (%d devices)", gw, stored,
-             len(seen))
-    return {"ok": True, "stored": stored, "devices": sorted(seen)}
+    return stored, seen
 
 
 # ------------------------- ingest: TTN webhook -------------------------
@@ -220,6 +308,11 @@ async def ttn_webhook(request: Request, token: str = Query(None)):
     event = await request.json()
     stored = 0
     for up in parse_uplink_event(event):
+        # The uplink's own received_at is the stamp AND the exact-dedup
+        # key (mirrors the poller path): the old code stored seen_at=now,
+        # so late TTN deliveries got dishonest stamps and webhook retries
+        # beyond the 60-s heuristic window duplicated rows.
+        frame_ts = received_at_to_epoch(up.get("received_at"))
         try:
             kind, decoded = decode_frame(up["f_port"], up["bytes"])
         except ValueError as e:
@@ -227,20 +320,45 @@ async def ttn_webhook(request: Request, token: str = Query(None)):
             continue
         raw_hex = up["bytes"].hex()
         if kind == "telemetry":
-            if db.has_duplicate(up["device_id"], "ttn", raw_hex):
+            if frame_ts is not None:
+                if db.has_frame(up["device_id"], "ttn", frame_ts, raw_hex):
+                    continue
+            elif db.has_duplicate(up["device_id"], "ttn", raw_hex):
                 continue
             db.insert_reading(up["device_id"], "ttn", decoded, raw_hex,
+                              seen_at=frame_ts, frame_ts=frame_ts,
                               f_cnt=up.get("f_cnt"))
         elif kind == "history":
             for entry in decoded["entries"]:
-                if db.has_duplicate(up["device_id"], "ttn-hist",
-                                    raw_hex + str(entry["gps_time"])):
-                    continue
-                db.insert_reading(up["device_id"], "ttn-hist",
-                                  _history_as_reading(entry), raw_hex,
-                                  f_cnt=up.get("f_cnt"))
+                if entry.get("gps_time"):
+                    if db.has_history_fix(up["device_id"], entry["gps_time"]):
+                        continue
+                    db.insert_reading(up["device_id"], "ttn-hist",
+                                      _history_as_reading(entry), raw_hex,
+                                      seen_at=entry["gps_time"],
+                                      f_cnt=up.get("f_cnt"))
+                else:
+                    # No fix time: exact-dedup on (frame_ts, raw_hex) —
+                    # has_frame keys on frame_ts, so tag the index to
+                    # keep multi-entry frames distinct.
+                    if frame_ts is None:
+                        continue
+                    entry_hex = f"{raw_hex}#{decoded['entries'].index(entry)}"
+                    if db.has_frame(up["device_id"], "ttn-hist", frame_ts,
+                                    entry_hex):
+                        continue
+                    db.insert_reading(up["device_id"], "ttn-hist",
+                                      _history_as_reading(entry), entry_hex,
+                                      seen_at=frame_ts, frame_ts=frame_ts,
+                                      f_cnt=up.get("f_cnt"))
         else:
-            db.insert_diagnostic(up["device_id"], decoded, raw_hex)
+            if frame_ts is not None:
+                if db.has_diagnostic(up["device_id"], frame_ts, raw_hex):
+                    continue
+            elif db.has_diag_duplicate(up["device_id"], raw_hex):
+                continue
+            db.insert_diagnostic(up["device_id"], decoded, raw_hex,
+                                 seen_at=frame_ts)
         stored += 1
     return {"ok": True, "stored": stored}
 
@@ -715,18 +833,19 @@ def _csv_response(rows: list, columns: list, filename: str) -> Response:
     )
 
 
+def _safe_name(device_id: str) -> str:
+    """Sanitize a device id for use in a Content-Disposition filename:
+    ids arrive from ?device= (attacker-writable on any LAN machine) and
+    raw slashes/quotes/CRLF in a response header are at best ugly and at
+    worst a 500 from starlette's header validation."""
+    return re.sub(r"[^A-Za-z0-9_-]+", "_", device_id)[:64] or "device"
+
+
 _READING_COLS = ["seen_at", "gps_time", "device_id", "source", "temp_c",
                  "hum_pct", "pressure_hpa", "bat_mv", "lux", "acc_x_mg",
                  "acc_y_mg", "acc_z_mg", "latitude", "longitude", "altitude_m",
                  "sats", "gps_valid", "awake_s", "sleep_min", "gpio",
                  "raw_hex"]
-
-
-def _epoch(params, key: str):
-    v = params.get(key)
-    if not v:
-        return None
-    return int(v)  # 400s bubble up as HTTPException via handler? keep simple
 
 
 @app.get("/api/export/{device_id}.csv")
@@ -735,7 +854,7 @@ async def export_readings_csv(device_id: str,
                               until: Optional[int] = Query(None)):
     rows = _export_rows(device_id, since, until)
     return _csv_response(rows, _READING_COLS,
-                         f"minilora-{device_id}-readings.csv")
+                         f"minilora-{_safe_name(device_id)}-readings.csv")
 
 
 @app.get("/api/export/{device_id}.json")
@@ -751,15 +870,20 @@ def _export_rows(key: str, since: Optional[int],
                  until: Optional[int]) -> list:
     """Readings for a device_id or a [device_groups] label (all members
     merged, time-sorted). Each row keeps its TRUE device_id — a mixed
-    export stays traceable to its transport."""
+    export stays traceable to its transport. Capped at 200k rows: an
+    export must never OOM the server (readings_all has no LIMIT); the
+    cap is logged so a truncated export is not silently wrong."""
     ids, _, _ = _resolve_device_key(key)
     rows = []
     for i in ids:
         rows.extend(db.readings_all(i, since=since, until=until))
+        if len(rows) > 200_000:
+            log.warning("export %s: capped at 200k rows", key)
+            break
     rows.sort(key=lambda r: r["seen_at"] or 0)
     for r in rows:
         r.setdefault("device_id", key)
-    return rows
+    return rows[:200_000]
 
 
 @app.get("/api/export/{device_id}/diagnostics.csv")
@@ -767,7 +891,10 @@ async def export_diagnostics_csv(device_id: str):
     ids, _, _ = _resolve_device_key(device_id)
     rows = []
     for i in ids:
-        rows.extend(db.diagnostics(i, limit=1_000_000))
+        rows.extend(db.diagnostics(i, limit=100_000))
+        if len(rows) > 100_000:
+            log.warning("diag export %s: capped at 100k rows", device_id)
+            break
     rows.sort(key=lambda d: d["seen_at"] or 0)
     for r in rows:
         r.setdefault("device_id", device_id)
@@ -777,7 +904,8 @@ async def export_diagnostics_csv(device_id: str):
             "sensor_read_failures", "gps_consec_fails", "power_flags",
             "flags2", "last_ttff", "link_margin", "gw_cnt", "ota_status",
             "config_flags", "raw_hex"]
-    return _csv_response(rows, cols, f"minilora-{device_id}-diagnostics.csv")
+    return _csv_response(rows, cols,
+                         f"minilora-{_safe_name(device_id)}-diagnostics.csv")
 
 
 @app.get("/api/export/db")
@@ -1334,51 +1462,6 @@ _poller = None       # the TTNPoller instance (for /api/ttn/fetch-now)
 _fetch_lock = None   # created in startup: manual fetches don't overlap
 
 
-@app.on_event("startup")
-async def startup():
-    global _poller_task, _poller, _fetch_lock, _retention_task
-    _poller = None
-    _fetch_lock = asyncio.Lock()
-
-    # ---- retention (keep the DB bounded for set-and-forget LAN use) ----
-    _ensure_log_file_handler()
-    if cfg.retention.enabled:
-        _retention_task = asyncio.create_task(_retention_loop())
-        log.info("retention: %d readings/device, DB cap %d MB, every %d s",
-                 cfg.retention.readings_per_device, cfg.retention.db_max_mb,
-                 cfg.retention.check_interval_s)
-
-    # ---- Home Assistant bridge (MQTT discovery) ----
-    if cfg.ha.enabled and cfg.ha.broker:
-        try:
-            from minilora_server.ha import HAPublisher
-            ha_publisher = HAPublisher(cfg.ha)
-            db.on_reading = _ha_on_reading
-            db.on_diagnostic = _ha_on_diagnostic
-            ha_publisher._on_connected = _ha_backfill
-            ha_publisher.start()
-            log.info("HA bridge started (%s:%d)", cfg.ha.broker, cfg.ha.port)
-        except Exception:
-            log.exception("HA bridge failed to start")
-            ha_publisher = None
-    else:
-        log.info("HA bridge disabled ([ha] enabled=false or no broker)")
-
-    # ---- TTN storage-API poller ----
-    if not (cfg.ttn.enabled and cfg.ttn.api_key and cfg.ttn.device_ids):
-        log.info("TTN poller disabled ([ttn] enabled=false or incomplete)")
-        return
-    poller = TTNPoller(
-        cfg.ttn.region, cfg.ttn.app_id, cfg.ttn.api_key,
-        cfg.ttn.device_ids, cfg.ttn.poll_interval_s,
-        cfg.ttn.poll_limit, cfg.ttn.poll_window_h,
-        on_frame=_store_polled,
-    )
-    _poller = poller
-    # Keeping the reference matters: an unreferenced task can be
-    # garbage-collected before it ever runs (this silently killed the
-    # poller once — no log line, no polls, nothing).
-    _poller_task = asyncio.create_task(poller.run_forever())
 
 
 @app.post("/api/ttn/fetch-now")

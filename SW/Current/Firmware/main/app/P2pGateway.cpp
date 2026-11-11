@@ -116,10 +116,13 @@ void remember(uint32_t origin, uint32_t seq)
 }
 
 /// Forward one heard body under the ORIGIN's identity: the server keys it
-/// by ?device= and takes frame_ts from the body's own gps_time (v1 M1
-/// path — the batched /p2p endpoint is the next step).
-void forward(const uint8_t *body, size_t bodyLen, uint32_t origin)
-{
+/// by ?device=. The endpoint MUST match the frame type: the server decodes
+/// /data as 28-byte telemetry and /diag as a schema-0x03/04/05 diag frame —
+/// forwarding a leaf's diag body to /data fabricated a readings row with
+/// temp = 4 °C / hum = fwMajor (schema byte 4 read as temperature), and
+/// 24/29-byte diag frames broke /data's 28-multiple check entirely.
+void forward(const uint8_t *body, size_t bodyLen, uint32_t origin,
+             bool isDiag) {
     if (g_cfg->wifiSSID[0] == '\0' || (wifiTried && !wifiUp)) {
         return; // no WiFi configured, or this wake's connect already failed
     }
@@ -138,8 +141,11 @@ void forward(const uint8_t *body, size_t bodyLen, uint32_t origin)
     snprintf(name, sizeof(name), "%08lX", static_cast<unsigned long>(origin));
     if (WifiTransport::postPayload(body, bodyLen, g_cfg->wifiSSID,
                                    g_cfg->wifiPassword, g_cfg->wifiServerIP,
-                                   g_cfg->wifiServerPort, name)) {
-        ESP_LOGI(TAG, "forwarded %08lX", static_cast<unsigned long>(origin));
+                                   g_cfg->wifiServerPort, name,
+                                   10'000,
+                                   isDiag ? "/diag" : "/data")) {
+        ESP_LOGI(TAG, "forwarded %08lX (%s)",
+                 static_cast<unsigned long>(origin), isDiag ? "diag" : "tele");
     }
 }
 
@@ -180,7 +186,7 @@ void handleAirFrame(const uint8_t *buf, size_t len, uint32_t nowSec)
                      static_cast<unsigned long>(origin), (unsigned)sleepMin);
         }
     }
-    forward(body, bl, origin);
+    forward(body, bl, origin, type == p2p::kTypeDiag);
     feedWatchdog();
 }
 

@@ -14,12 +14,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 os.environ.setdefault("MINILORA_DB", str(
     Path(__file__).resolve().parent.parent / "data" / "test_p2p.sqlite3"))
 
-# Fresh DB per pytest run: the module-level Database() opens the env path
-# at import — deleting here gives every run a clean slate (the file is a
-# test artifact, never the live DB).
-_p2p_db = os.environ["MINILORA_DB"]
-if os.path.exists(_p2p_db):
-    os.remove(_p2p_db)
 
 from fastapi.testclient import TestClient          # noqa: E402
 from minilora_server import config as _configmod   # noqa: E402
@@ -94,3 +88,43 @@ def test_p2p_diag_and_history_routing(client):
     # diag frame + 2 history entries (each §2.1 entry is one reading)
     assert r.json()["stored"] == 3
     assert db.has_diagnostic("AABBCCDD", now, diag.hex())
+
+
+def test_p2p_kind_field_overrides_heuristic(client):
+    """The batched contract: an explicit "kind" wins over the length +
+    schema-byte heuristic. A 4 °C telemetry body (byte 0 = 0x04) looks
+    exactly like a diag v4 schema byte to the heuristic — it must land
+    as TELEMETRY when the gateway says so."""
+    ts = _ts()
+    body = bytearray(28)
+    body[0] = 4                     # 4 °C — heuristic would say "diag v4"
+    body[1] = 55                    # humidity
+    line = json.dumps({"origin": "AABBCCDD", "seq": 12, "ts": ts,
+                       "hex": bytes(body).hex(), "kind": "telemetry"})
+    r = client.post("/p2p", data=line + "\n")
+    assert r.status_code == 200 and r.json()["stored"] == 1
+    rows = db.readings("AABBCCDD", limit=10)
+    row = next(r for r in rows if r["frame_ts"] == ts)
+    assert row["source"] == "p2p"
+    assert row["temp_c"] == 4.0 and row["hum_pct"] == 55
+    # ...and nothing leaked into diagnostics
+    assert not db.has_diagnostic("AABBCCDD", ts, bytes(body).hex())
+
+
+def test_p2p_kind_telemetry_beats_4c_heuristic_failure(client):
+    """Without the kind field the OLD heuristic misfiles this frame
+    (documents the bug the kind field exists to fix)."""
+    ts = _ts()
+    body = bytearray(28)
+    body[0] = 4                     # 4 °C
+    line = json.dumps({"origin": "AABBCCDD", "seq": 13, "ts": ts,
+                       "hex": bytes(body).hex()})
+    r = client.post("/p2p", data=line + "\n")
+    assert r.status_code == 200 and r.json()["stored"] == 1
+    # heuristic: routed to diagnostics (fw 0.0.0 junk row)
+    assert db.has_diagnostic("AABBCCDD", ts, bytes(body).hex())
+
+
+def test_p2p_rejects_oversized_batch(client):
+    r = client.post("/p2p", data=b"x" * 1_100_000)
+    assert r.status_code == 413
